@@ -5,19 +5,20 @@ Created on Sun Jan 17 05:50:54 2021
 @author: Nikita
 """
 
-import lfp
-import pickle as pk
 import os
-import xarray as xr
+
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
+#import pandas as pd
+#import xarray as xr
+import pickle as pk
 
+import useful as usf
 import trial_manager as trl
 import spiketrain_manager as spk
-#import firing_rate as fr
+import firing_rate as fr
+import lfp
 import spike_corr as spcor
-import useful as usf
 import vis
 
 
@@ -28,7 +29,8 @@ dirpath_res_root = 'H:\\WORK\\Camilo\\Processing_Pancake_1chan'
 os.mkdir(dirpath_res_root)
 
 
-# Run arbitrary function and save the result, or load the previously calculated result
+# Run arbitrary function and save the result,
+# or load the previously calculated result
 def run_or_load(f, fname_cache, recalc=False):
     
     fpath_cache = os.path.join(dirpath_res_root, fname_cache)
@@ -55,7 +57,8 @@ trial_info = run_or_load(
 # Select correct trials
 # TODO: trials with the typical delay length
 for n in range(len(trial_info)):
-    trial_info[n]['trial_tbl'] = trl.select_correct_trials(trial_info[n]['trial_tbl'])
+    trial_info[n]['trial_tbl'] = \
+        trl.select_correct_trials(trial_info[n]['trial_tbl'])
 
 
 # Create cell info
@@ -74,15 +77,21 @@ lock_ev = 'stim1_t'
 time_win = [-1,3]
 
 # Epoch LFPs
-fname_out_LFP_ep = 'chan_all_epoched_info_(ev=%s)_(t=%.02f-%.02f)' % (lock_ev, time_win[0], time_win[1])
+fname_out_LFP_ep = ('chan_all_epoched_info_(ev=%s)_(t=%.02f-%.02f)' % 
+                    (lock_ev, time_win[0], time_win[1]))
 chan_epoched_info = run_or_load(
-        lambda: lfp.epoch_lfp_data_batch(chan_info, trial_info, lock_event=lock_ev, time_win=time_win),
+        lambda: lfp.epoch_lfp_data_batch(chan_info, trial_info,
+                                         lock_event=lock_ev,
+                                         time_win=time_win),
         fname_out_LFP_ep, recalc=False)
 
 # Epoch spiketrains
-fname_out_spikes_ep = 'cell_epoched_info_(ev=%s)_(t=%.02f-%.02f)' % (lock_ev, time_win[0], time_win[1])
+fname_out_spikes_ep = ('cell_epoched_info_(ev=%s)_(t=%.02f-%.02f)' %
+                       (lock_ev, time_win[0], time_win[1]))
 cell_epoched_info = run_or_load(
-        lambda: spk.epoch_spike_data_batch(cell_info, trial_info, lock_event=lock_ev, time_win=time_win),
+        lambda: spk.epoch_spike_data_batch(cell_info, trial_info,
+                                           lock_event=lock_ev,
+                                           time_win=time_win),
         fname_out_spikes_ep, recalc=False)
 
 
@@ -92,9 +101,11 @@ win_overlap = 0.450
 fmax = 100
 #win_overlap = 0.499
 #fmax = 60
-fname_out_tf = '%s_TF_(wlen=%.03f_wover=%.03f_fmax=%.01f)' % (fname_out_LFP_ep, win_len, win_overlap, fmax)
+fname_out_tf = ('%s_TF_(wlen=%.03f_wover=%.03f_fmax=%.01f)' %
+                (fname_out_LFP_ep, win_len, win_overlap, fmax))
 chan_tf_info = run_or_load(
-        lambda: lfp.calc_lfp_tf(chan_epoched_info, win_len=win_len, win_overlap=win_overlap, fmax=fmax),
+        lambda: lfp.calc_lfp_tf(chan_epoched_info, win_len=win_len,
+                                win_overlap=win_overlap, fmax=fmax),
         fname_out_tf, recalc=False)
 
 # TF ROIs
@@ -132,7 +143,7 @@ ROI_vec = [
 fname_out_spPLVf = f'{fname_out_tf}_spPLV_tr_({ROIset_name})'
 spPLVf_info = run_or_load(
         lambda: spcor.calc_spike_TF_PLV_by_trial_batch(cell_epoched_info, chan_tf_info, ROI_vec, ROIset_name),
-        fname_out_spPLVf, recalc=True)
+        fname_out_spPLVf, recalc=False)
 
 # Firing rate vectors
 t_range = (0.5, 1.2)
@@ -208,141 +219,3 @@ plt.xlabel('Firing rate')
 plt.ylabel('LFP power')
 plt.legend(['gamma', 'beta'])
 
-
-dirpath_out = 'H:\\WORK\\Camilo\\Processing\\Pancake_delay_r_vs_beta_log'
-#plot_rate_vs_TFpow_by_cell(rvec_info, tfROI_info, dirpath_out, 'beta_del12')
-
-
-'''
-fbands = [[12,22], [24,36], [14,36]]
-tbl_spPLV_fband = spcor.calc_spPLV_fband_chan_unroll(spPLVf_info, fbands)
-
-x = tbl_spPLV_fband.Nspikes / 500
-y1 = tbl_spPLV_fband['spPLV_(14-36_Hz)']
-#y2 = tbl_spPLV_fband['spPLV_(24-36_Hz)']
-d = spk.parse_chan_name(tbl_spPLV_fband.cell_name.tolist())
-chan_idx_chan = np.array(tbl_spPLV_fband.chan_id, dtype=int)
-chan_idx_cell = np.array(d['chan_id'], dtype=int)
-mask = (chan_idx_chan == chan_idx_cell)
-plt.figure();
-plt.plot(x, y1, '.')
-plt.plot(x[mask], y1[mask], '.')
-#plt.plot(x+0.1, y2, '.')
-'''
-
-'''
-# ERP
-ERP = lfp.calc_ERP_batch(chan_epoched_info)
-plt.figure()
-plt.imshow(ERP, aspect='auto', extent=[-1,3,52,0])
-
-# Test filering
-Xfilt = np.zeros((52,4000))
-for n in range(52):
-    fpath_in = chan_filt_info.fpath_filtered.iloc[n]
-    Xfilt_cur = xr.load_dataset(fpath_in)['__xarray_dataarray_variable__']
-    Xfilt[n,:] = Xfilt_cur.mean(dim='trial_num')
-    #plt.imshow(Xfilt, aspect='auto', extent=[-1,3,Xfilt.shape[0],0])
-plt.figure()
-plt.imshow(Xfilt, aspect='auto', extent=[-1,3,52,0])
-'''
-
-'''
-fpath_in = chan_hilb_info.fpath_hilbert.iloc[0]
-X = xr.load_dataset(fpath_in, engine='h5netcdf')['__xarray_dataarray_variable__']
-#X = X - X.mean(dim='trial_num')
-plt.figure()
-plt.imshow(np.abs(X), aspect='auto', extent=[-1,3,X.shape[0],0])
-'''
-
-'''
-X = np.zeros((52,4000))
-for n in range(52):
-    fpath_in = chan_hilb_info.fpath_hilbert.iloc[n]
-    x = xr.load_dataset(fpath_in, engine='h5netcdf')['__xarray_dataarray_variable__']
-    xavg= x.mean(dim='trial_num')
-    #x = x - x.mean(dim='trial_num')
-    x = abs(x)**2
-    X[n,:] = x.mean(dim='trial_num') - abs(xavg)**2
-    #plt.imshow(Xfilt, aspect='auto', extent=[-1,3,Xfilt.shape[0],0])
-X1 = X / np.mean(X[:,0:999], axis=1, keepdims=True)
-plt.figure()
-#plt.imshow(X1, aspect='auto', extent=[-1,3,52,0])
-plt.plot(X1.mean(axis=0))
-'''
-
-# TFpow plot
-'''
-W = lfp.calc_TFpow_batch(chan_tf_info, mode='induced')
-mask_bl = (W.time < -0.1)
-Wbl = W.isel(time=mask_bl).mean(dim='time')
-#W1 = W
-#W1 = W / W.mean(dim='time')
-#W1 = np.log(W) - np.log(Wbl)
-W1 = np.log(W)
-#W1 = W1.isel(chan_num=chan_mask)
-Wavg = W1.mean(dim='chan_num')
-plt.figure()
-plt.imshow(Wavg, aspect='auto', extent=[W.time[0],W.time[-1],W.freq[0],W.freq[-1]], origin='lower')
-#W2 = W1.isel(time = ((W1.time > 0.5) & (W1.time < 1.2))).mean(dim=['time','chan_num'])
-#W2 = W1.isel(time = ((W1.time > 1.6) & (W1.time < 10))).mean(dim=['time','chan_num'])
-#W2 = W1.mean(dim=['time','chan_num'])
-#W2 = np.log(W2)
-#plt.plot(W1.freq, W2)
-'''
-
-
-'''
-for n in range(len(W1.chan_num)):
-    W2 = W1.isel(chan_num=n)
-    plt.imshow(W2, aspect='auto', extent=[W.time[0],W.time[-1],W.freq[0],W.freq[-1]], origin='lower')
-    plt.title(W1.chan_name.data[n])
-    plt.draw()
-    plt.waitforbuttonpress()
-'''
-    
-
-'''
-# Load rate covariances
-C = xr.load_dataset(rcov_info.iloc[0].fpath_rvec_cov, engine='h5netcdf')['__xarray_dataarray_variable__']
-
-# Average over trials and central lag bins
-lag_idx = [14, 15, 16]
-Cz = C.isel(sample_num=lag_idx).mean(dim='sample_num').mean(dim='trial_num')
-
-# Normalize and set zeros to the diagonal
-Czn = Cz.copy()
-Ncell = len(Cz.cell1_num)
-for c1 in range(Ncell):
-    for c2 in range(Ncell):
-        Czn[c1,c2] /= np.sqrt((Czn[c1,c1] * Czn[c2,c2]))
-for c in range(Ncell):
-    Czn[c,c] = np.nan
-
-# Get channel name for each cell    
-ch_vec = np.nan * np.ones(Ncell)
-for c in range(Ncell):
-    cell_name = Cz.cell1_name[c]
-    ci = cell_info[cell_info.cell_name==cell_name]
-    ch_vec[c] = ci.chan_id.item()
-
-# Discard pairs from the same channel
-Cz2 = Cz.copy()
-Czn2 = Czn.copy()
-for c1 in range(Ncell):
-    for c2 in range(Ncell):
-        if ch_vec[c1]==ch_vec[c2]:
-            Cz2[c1,c2] = np.nan
-            Czn2[c1,c2] = np.nan
-    
-plt.figure()
-plt.imshow(Czn2, vmin=-1, vmax=1)
-plt.colorbar()
-
-Czn_vec = Czn2.copy().data.ravel()
-Czn_vec = np.sort(Czn_vec[Czn_vec != np.nan])
-
-
-plt.figure()
-plt.plot(Czn_vec, '.')
-'''

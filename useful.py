@@ -68,9 +68,12 @@ def get_chan_idx_by_cell_names(cell_names, chan_names, cell_info_tbl, chan_info_
         chan_idx[n] = np.where(chan_names == chan_name)[0]
     return chan_idx
 
-def load_xarray(fpath_in):
+def load_xarray(fpath_in, unpack=True):
     try:
-        return xr.load_dataset(fpath_in, engine='h5netcdf')['__xarray_dataarray_variable__']
+        X = xr.load_dataset(fpath_in, engine='h5netcdf')
+        if unpack:
+            X = X['__xarray_dataarray_variable__']
+        return X
     except:
         return None
 
@@ -142,3 +145,19 @@ def get_cell_channels(cell_info):
     chan_info = chan_info.drop_duplicates()
         
     return chan_info
+
+
+def list_remove(lst, elem):
+    """ Remove an element from a list without exception if it is missing
+    
+    """
+    if elem in lst:
+        lst.remove(elem)
+        
+def dict_remove(d, key):
+    """ Remove a key from a dict without exception if it is missing
+    
+    """
+    if key in d:
+        d.pop(key)
+    

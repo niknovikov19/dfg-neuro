@@ -26,7 +26,7 @@ import vis
 dirpath_data_root = 'H:\\WORK\\Camilo\\data'
 dirpath_res_root = 'H:\\WORK\\Camilo\\Processing_Pancake_1chan'
 
-os.mkdir(dirpath_res_root)
+#os.mkdir(dirpath_res_root)
 
 
 # Run arbitrary function and save the result,

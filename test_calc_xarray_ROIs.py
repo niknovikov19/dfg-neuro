@@ -128,6 +128,8 @@ ROI_descs[3] = [
          'limits': {'dim0': (0, 2), 'dim1': (0, 0), 'dim2': (0, 1)}},
         ]
 
+# TODO test different order of ROI dimensions and coords
+
 # Perform tests
 for test_num in range(4):
     

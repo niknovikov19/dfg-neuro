@@ -4,6 +4,7 @@
 """
 
 
+import itertools
 #import os
 
 import numpy as np
@@ -129,4 +130,204 @@ def calc_xarray_ROIs(X_in, ROIset_dim_name, ROI_coords, ROI_descs,
     # TODO: attributes
     
     return X_out
-                         
+
+
+#def coord_val_generator_ROI()
+
+
+def combine_xarray_dimensions(X_in, dims_to_combine, dim_name_new,
+                              coord_names_new=None, coord_val_generator=None):
+    
+    # Mapping between the input dimensions and coordinates
+    dim_to_coord_map = {}
+    for dim_name in X_in.dims:
+        dim_to_coord_map[dim_name] = [
+            coord_name for coord_name, coord_data in X_in.coords.items()
+            if coord_data.dims[0] == dim_name]
+
+    # Spared dimensions: those that should not be combined
+    # dims_spared - names of the spared dimension
+    # dim_nums_spared - positions of the spared dimensions in the list
+    # of all input dimensions
+    # shape_spared - shape list corresponding to the spared dimensions
+    dim_data_spared = [(dim_num, dim_name)
+                for dim_num, dim_name in enumerate(X_in.dims)
+                if dim_name not in dims_to_combine]
+    if dim_data_spared:
+        dim_nums_spared, dims_spared = zip(*dim_data_spared)
+    else:
+        dim_nums_spared, dims_spared = [], []
+    shape_spared = [X_in.shape[n] for n in dim_nums_spared]
+    
+    # Spared coordinates: those that correspond to the spared dimensions
+    coords_names_spared = [
+        coord_names
+        for dim_name, coord_names in dim_to_coord_map.items()
+        if dim_name not in dims_to_combine
+    ]
+    # Unroll the coord names into a single list
+    coord_names_spared = list(itertools.chain(*coords_names_spared))
+    coords_spared = {coord_name: X_in.coords[coord_name].values
+                     for coord_name in coord_names_spared}
+    # Prepare the coords dict in the form ised in the DataArray constructor
+    coords_spared = xarray_coords_to_dict(X_in, coords_spared)
+    
+    # Combinations of the coordinate values along the combinated dimensions
+    # Coordinates within a combination are in the same order as the
+    # dimensions in 'dim_name_new' argument
+    # Coordinate values are 0, 1, 2, ...
+    combined_shape = []
+    for dim_name in dims_to_combine:
+        dim_num = X_in.dims.index(dim_name)
+        combined_shape.append(X_in.shape[dim_num])
+    combined_ranges = [np.arange(n) for n in combined_shape]
+    coord_combinations = list(itertools.product(*combined_ranges))
+
+    # Size by the new (combined) dimension
+    dim_new_sz = len(coord_combinations)
+
+    # New (combined) coordinates
+    if coord_names_new is None:
+        coord_names_new = [dim_name_new]
+    if dim_name_new not in coord_names_new:
+        raise ValueError('One of the new coordinate names must be the same '
+                         'as the new dimension name')
+    coords_new = {coord_name: [] for coord_name in coord_names_new}
+    if coord_val_generator is None:
+        if len(coord_names_new) != 1:
+            raise ValueError('There should be exactly one new coordinate '
+                             'if no coord_val_generator() is provided')
+        coords_new[coord_names_new[0]] = np.arange(dim_new_sz)
+    else:
+        for comb_num, coord_combination in enumerate(coord_combinations):
+            coord_vals_comb = {}
+            for dim_num, coord_val_num in enumerate(coord_combination):
+                dim_name = dims_to_combine[dim_num]
+                coord_vals_comb[dim_name] = {}
+                for coord_name in dim_to_coord_map[dim_name]:
+                    coord_vals_comb[dim_name][coord_name] = (
+                            X_in.coords[coord_name].values[coord_val_num])
+            coord_vals_new = coord_val_generator(coord_vals_comb,
+                                                 comb_num,
+                                                 coord_names_new)
+            for coord_name in coord_names_new:
+                coords_new[coord_name].append(coord_vals_new[coord_name])
+        for coord_name, coord_vals in coords_new.items():
+            if coord_name != dim_name_new:
+                coords_new[coord_name] = (dim_name_new, coord_vals)
+                
+    # Output dimension and coordinates
+    dims_out = [dim_name_new] + list(dims_spared)
+    coords_out = {**coords_new, **coords_spared}
+    
+    # Allocate the output            
+    shape_out = [dim_new_sz] + shape_spared
+    x_out = np.ndarray(shape_out, dtype=X_in.dtype)
+    X_out = xr.DataArray(x_out, coords=coords_out, dims=dims_out)
+    
+    # Fill the output
+    for n, coord_combination in enumerate(coord_combinations):
+        index_in = {dim_name: coord_combination[m]
+                    for m, dim_name in enumerate(dims_to_combine)}
+        X_out[{dim_name_new: n}] = X_in[index_in]
+        
+    # Copy attributes
+    X_out.attrs = X_in.attrs.copy()
+    # TODO: attributes
+    
+    return X_out
+
+
+def coord_val_generator_ROI(coord_vals_comb, comb_num, coord_names_out):
+    """ Combine ROI names, to use in combine_xarray_dimensions().
+    
+    Example:        
+        coord_vals_comb = {
+            'xdim': {
+                'xROI_num': 2,
+                'xROI_name': 'xROI2',
+                'xROI_name2': 'xROI_(2-20)'                
+            },
+            'ydim': {
+                'yROI_num': 3,
+                'yROI_name': 'yROI3',
+                'yROI_name2': 'yROI_(3-30)'                
+            }
+        }
+            
+        comb_num = 10
+        
+        coord_names_out = ['xyROI_num', 'xyROI_name', 'xyROI_name2']
+        
+        output = {
+            'xyROI_num': 10,
+            'xyROI_name': 'xROI2_yROI3',
+            'xyROI_name2': 'xyROI_(2-20)_(3-30)'
+        }
+    """
+
+    # Keep together input and output coordinates for similar processing
+    dim_names_in = list(coord_vals_comb.keys())
+    dim_names = dim_names_in + ['OUTPUT']
+    
+    # Types of the coordinates. Each type corresponds to a postfix of 
+    # coordinate name. Each type is processed in its own way.
+    coord_types = ['num', 'name', 'name2']
+    
+    # For each dimension (including the 'OUTPUT' dimension),
+    # find the coordinate name for each coodinate type
+    coords_by_type = {}
+    for dim_name in dim_names:
+        # Initialize the info for a given dimension
+        coords_by_type[dim_name] = {
+            coord_type: None for coord_type in coord_types
+        }
+        # Will search either among the output or input coordinates
+        if dim_name == 'OUTPUT':
+            coord_names = coord_names_out
+        else:
+            coord_names = coord_vals_comb[dim_name]
+        # Search for each coordinate type among given coordinates
+        for coord_name in coord_names:
+            for coord_type in coord_types:
+                # If a match is found - store the full coordinate name,
+                # and a name without the type-denoting postfix
+                if coord_name.endswith(coord_type):
+                    postfix = '_' + coord_type
+                    coord_name_prefix = coord_name[:-len(postfix)]
+                    coords_by_type[dim_name][coord_type]= (
+                            coord_name, coord_name_prefix)
+    
+    name_coord_vals_in = []
+    name2_coord_vals_in = []
+    for dim_name in dim_names_in:
+        # Get 'name' coordinate value
+        coord_name = coords_by_type[dim_name]['name'][0]
+        coord_val = coord_vals_comb[dim_name][coord_name]
+        name_coord_vals_in.append(coord_val)
+        # Get 'name2' coordinate, without a prefix
+        coord_name = coords_by_type[dim_name]['name2'][0]
+        coord_prefix = coords_by_type[dim_name]['name2'][1]
+        coord_val = coord_vals_comb[dim_name][coord_name]
+        coord_val = coord_val.rpartition(coord_prefix + '_')[-1]
+        name2_coord_vals_in.append(coord_val)
+    
+    coord_vals_out = {}       
+    # Set output 'num' coordinate value
+    coord_name = coords_by_type['OUTPUT']['num'][0]
+    coord_vals_out[coord_name] = comb_num    
+    # Set output 'name' coordinate value
+    coord_name = coords_by_type['OUTPUT']['name'][0]
+    coord_val = '_'.join(name_coord_vals_in)
+    coord_vals_out[coord_name] = coord_val
+    # Set output 'name2' coordinate value
+    coord_name = coords_by_type['OUTPUT']['name2'][0]
+    coord_prefix = coords_by_type['OUTPUT']['name2'][1]
+    coord_val = coord_prefix + '_' + '_'.join(name2_coord_vals_in)
+    coord_vals_out[coord_name] = coord_val
+    
+    return coord_vals_out
+
+
+
+

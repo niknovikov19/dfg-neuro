@@ -7,9 +7,15 @@ Created on Mon Sep  6 20:02:16 2021
 
 
 import itertools
+import os
+import sys
 
 import numpy as np
 import xarray as xr
+
+dirpath_file = os.path.dirname(os.path.abspath(__file__))
+dirpath_pkg = os.path.dirname(dirpath_file)
+sys.path.append(dirpath_pkg)
 
 #import useful as usf
 import data_proc_common as dpc

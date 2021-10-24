@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Provides common functions for processing various types of data.
+"""Functions for creating ROI's of xarray.DataArray.
 
 """
-
 
 import itertools
 #import os
 import re
 
+from more_itertools import unique_everseen
 import numpy as np
 #import pandas as pd
 import xarray as xr
@@ -46,8 +46,9 @@ def generate_ROI_names(ROI_coords, ROI_descs):
     return ROI_names, ROI_names2
 
 
-def _calc_xarray_ROIs(X_in, ROIset_dim_name, ROI_coords, ROI_descs,
-                     reduce_fun=(lambda X, dims: X.mean(dim=dims))):
+def _calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
+                     reduce_fun=(lambda X, dims: X.mean(dim=dims)),
+                     ROIset_dim_name=None) -> '(xr.DataArray, str)':
     """Groups xarray::DataArray content into ROIs over given dimensions.
     
     ROI_coords = ('coord1', 'coord2', ...)
@@ -64,10 +65,16 @@ def _calc_xarray_ROIs(X_in, ROIset_dim_name, ROI_coords, ROI_descs,
         ...
     ]
     
+    Returns new DataArray and the name of the created ROI dimenion
+    
     """
-
+    
     # Dimensions over which the ROIs are grouped
     ROI_dims = [get_xarrray_dim_by_coord(X_in, coord) for coord in ROI_coords]
+    
+    # Name of the to-be-created ROI dimension
+    if ROIset_dim_name is None:
+        ROIset_dim_name = ''.join(ROI_dims) + 'ROI'
     
     # Select dimensions not covered by ROI
     # dims_out - names of the selected dimension
@@ -130,11 +137,12 @@ def _calc_xarray_ROIs(X_in, ROIset_dim_name, ROI_coords, ROI_descs,
     X_out.attrs = X_in.attrs.copy()
     # TODO: attributes
     
-    return X_out
+    return X_out, ROIset_dim_name
 
 
-def combine_xarray_dimensions(X_in, dims_to_combine, dim_name_new,
-                              coord_names_new=None, coord_val_generator=None):
+def combine_xarray_dimensions(X_in: xr.DataArray, dims_to_combine,
+                              dim_name_new, coord_names_new=None,
+                              coord_val_generator=None) -> xr.DataArray:
     
     # Mapping between the input dimensions and coordinates
     dim_to_coord_map = {}
@@ -419,15 +427,18 @@ def coord_val_generator_ROI_2(coord_vals_comb, comb_num, coord_names_out):
     return coord_vals_out
 
 
-def calc_xarray_ROIs(X_in, ROIset_dim_name, ROI_coords, ROI_descs,
+def calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
                      reduce_fun=(lambda X, dims: X.mean(dim=dims)),
-                     ROIset_dim_to_combine=None):
+                     ROIset_dim_to_combine=None,
+                     ROIset_dim_name=None) -> xr.DataArray:
     """Perform _calc_xarray_ROIs() + combine_xarray_dimensions()."""
     
-    X_out = _calc_xarray_ROIs(X_in, ROIset_dim_name, ROI_coords, ROI_descs,
-                              reduce_fun)
+    X_out, _ROIset_dim_name = _calc_xarray_ROIs(X_in, ROI_coords, ROI_descs,
+                                                reduce_fun, ROIset_dim_name)
     
     if ROIset_dim_to_combine is not None:
+        if ROIset_dim_name is None:
+            ROIset_dim_name = _ROIset_dim_name
         r = re.compile('(.+)ROI')
         dim_name_base_1 = r.findall(ROIset_dim_name)[0]
         dim_name_base_2 = r.findall(ROIset_dim_to_combine)[0]
@@ -442,13 +453,114 @@ def calc_xarray_ROIs(X_in, ROIset_dim_name, ROI_coords, ROI_descs,
                               coord_names_new, coord_val_generator_ROI_2)
         
     return X_out
-    
-        
-        
-        
-        
 
+
+def get_combinations(lst: list):
+    comb_lst = []
+    for n in range(1, len(lst)+1):
+        comb_lst += list(itertools.combinations(lst, n))
+    comb_lst_all = []
+    for comb in comb_lst:
+        comb_lst_all += list(itertools.permutations(comb))
+    return comb_lst_all
     
+        
+def calc_dataset_ROIs(X_in: xr.Dataset, ROI_coords, ROI_descs,
+                     reduce_fun=(lambda X, dims: X.mean(dim=dims)),
+                     ROIset_dim_to_combine=None,
+                     ROIset_dim_name=None) -> xr.Dataset:
+    """Calculate ROIs, optionally merge new ROI dimension with an old one."""
+    X_out_vars = {}
+    for var_name, X_in_var in X_in.data_vars.items():
+        
+        # Keep in the ROI desc only those coordinates that the current
+        # variable does have
+        coords_var = list(X_in_var.coords.keys())
+        ROI_coords_var = [ROI_coord for ROI_coord in ROI_coords
+                          if ROI_coord in coords_var]
+        ROI_descs_var = []
+        ROI_limits_list = []
+        for ROI_desc in ROI_descs:
+            ROI_limits = {
+                    coord_name: coord_limits
+                    for coord_name, coord_limits in ROI_desc['limits'].items()
+                    if coord_name in coords_var}
+            ROI_desc_var = {'name': ROI_desc['name'], 'limits': ROI_limits}
+            ROI_descs_var.append(ROI_desc_var)
+            ROI_limits_list.append(tuple(ROI_limits.values()))
+            
+        # Keep unique ROIs
+        ROI_limits_unique = list(unique_everseen(ROI_limits_list))
+        ROI_idx_unique = [ROI_limits_list.index(x) for x in ROI_limits_unique]
+        ROI_descs_var = [ROI_descs_var[i] for i in ROI_idx_unique]
+        
+        # - If an old ROI dimension to combinate is given by its name - check
+        # whether the current variable has this dimension, if not - do nothing
+        # - If the old ROI dimension is given by the list of its constituent
+        # dimensions, produce all possible ROI names from their combinations
+        # and search for the one that belongs to the current variable dims
+        dims_var = list(X_in_var.dims)
+        ROIset_dim_to_combine_var = ROIset_dim_to_combine
+        if ROIset_dim_to_combine_var is not None:
+            # Old ROI dimension is given by its name
+            if type(ROIset_dim_to_combine_var) == str:
+                if (ROIset_dim_to_combine_var + '_num') not in coords_var:
+                    ROIset_dim_to_combine_var = None
+            # Old ROI dimension is given by its costituent dimensions
+            else:
+                old_ROIset_coords = list(ROIset_dim_to_combine_var)
+                old_ROIset_coord_combinations = (
+                        get_combinations(old_ROIset_coords))
+                old_ROIset_name_variants = [
+                        ''.join(coord_comb) + 'ROI_num' 
+                        for coord_comb in old_ROIset_coord_combinations]
+                old_ROIset_names = [ROI_name
+                                   for ROI_name in old_ROIset_name_variants
+                                   if ROI_name in dims_var]
+                if len(old_ROIset_names) == 1:
+                    ROIset_dim_to_combine_var = old_ROIset_names[0]
+                elif len(old_ROIset_names) == 0:
+                    ROIset_dim_to_combine_var = None
+                else:
+                    raise ValueError('More than one name is suitable for the'
+                                     'to-be-combinated ROI dimension')
+                
+        # Calculate ROIs and combinate with an old ROI dimension (if needed)
+        # If no dimensions from the ROI desc are present in the current
+        # variable - just copy the variable to the output
+        if len(ROI_coords_var) != 0:
+            X_out_vars[var_name] = calc_xarray_ROIs(
+                    X_in_var, ROI_coords_var, ROI_descs_var,
+                    reduce_fun, ROIset_dim_to_combine_var, ROIset_dim_name)
+        else:
+            X_out_vars[var_name] = X_in_var.copy()
+            
+    X_out = xr.Dataset(X_out_vars)
+    return X_out
+        
+        
+# TODO: modify ROI naming in such way that an individual name is given for
+# each interval by each coordinate
+# Old:
+#ROI_descs['xy'] = [
+#        {'name': 'xyROI0', 'limits': {'x': (0, 1), 'ya': (0,10)}},
+#        {'name': 'xyROI1', 'limits': {'x': (1, 1), 'ya': (0,10)}},
+#        {'name': 'xyROI3', 'limits': {'x': (0, 1), 'ya': (1,10)}},
+#        {'name': 'xyROI4', 'limits': {'x': (1, 1), 'ya': (1,10)}}]
+# New:
+#ROI_descs['xy'] = [
+#        [{'x':  {'name': 'xROI0', 'limits': (0, 1)},
+#         {'ya': {'name': 'yROI0', 'limits': (0,10)}],
+#        [{'x':  {'name': 'xROI1', 'limits': (1, 1)},
+#         {'ya': {'name': 'yROI0', 'limits': (0,10)}],    
+#        [{'x':  {'name': 'xROI0', 'limits': (0, 1)},
+#         {'ya': {'name': 'yROI1', 'limits': (1,10)}],
+#        [{'x':  {'name': 'xROI1', 'limits': (1, 1)},
+#         {'ya': {'name': 'yROI1', 'limits': (1,10)}]]
+# This would allow correct ROI naming for dataset variables that do not have
+# all the dimensions given in the ROI description
+
+# TODO: Raise error if ROI coord is not present  
     
     
     

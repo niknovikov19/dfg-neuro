@@ -96,7 +96,12 @@ for id in idx:
 xs = x.astype(np.str)
 xs = xs.astype(np.object)
 
-Q = xr.DataArray(xs, coords=coords, dims=dims)
+Qxyz = xr.DataArray(xs, coords=coords, dims=dims)
+Qyz = Qxyz.sel(x=0, drop=True).copy()
+Qxz = Qxyz.sel(y=0, drop=True).copy()
+Qxy = Qxyz.sel(z=0, drop=True).copy()
+
+Q = xr.Dataset({'Qxyz': Qxyz, 'Qyz': Qyz, 'Qxz': Qxz, 'Qxy': Qxy})
 
 
 ROI_descs = {}
@@ -117,36 +122,54 @@ ROI_descs['z'] = [
         {'name': 'zROI2', 'limits': {'z': (0, 3)}},
         {'name': 'zROI3', 'limits': {'z': (2, 3)}},
         ]
+ROI_descs['xy'] = [
+        {'name': 'xyROI0', 'limits': {'x': (0, 1), 'ya': (0,10)}},
+        {'name': 'xyROI1', 'limits': {'x': (1, 1), 'ya': (0,10)}},
+        {'name': 'xyROI2', 'limits': {'x': (0, 2), 'ya': (0,10)}},
+        {'name': 'xyROI3', 'limits': {'x': (0, 1), 'ya': (1,10)}},
+        {'name': 'xyROI4', 'limits': {'x': (1, 1), 'ya': (1,10)}},
+        {'name': 'xyROI5', 'limits': {'x': (0, 2), 'ya': (1,10)}},
+        ]
+ROI_descs['zy'] = [
+        {'name': 'zyROI0', 'limits': {'z': (0, 2), 'ya': (0,10)}},
+        {'name': 'zyROI1', 'limits': {'z': (1, 3), 'ya': (0,10)}},
+        {'name': 'zyROI2', 'limits': {'z': (0, 3), 'ya': (0,10)}},
+        {'name': 'zyROI3', 'limits': {'z': (2, 3), 'ya': (0,10)}},
+        {'name': 'zyROI0', 'limits': {'z': (0, 2), 'ya': (1,10)}},
+        {'name': 'zyROI1', 'limits': {'z': (1, 3), 'ya': (1,10)}},
+        {'name': 'zyROI2', 'limits': {'z': (0, 3), 'ya': (1,10)}},
+        {'name': 'zyROI3', 'limits': {'z': (2, 3), 'ya': (1,10)}},
+        ]
 
 # TODO test different order of ROI dimensions and coords
 
 # For the string array, combine ROI elements by string concatenation
 reduce_fun = lambda Z, dims: reduce_fun_xarray(Z, dims, reduce_fun_1d_strjoin)
-    
+
 QROI = {}
-QROI['x'] = roi.calc_xarray_ROIs(Q, ['x'], ROI_descs['x'], reduce_fun)
-QROI['y'] = roi.calc_xarray_ROIs(Q, ['ya'], ROI_descs['y'], reduce_fun)
-QROI['z'] = roi.calc_xarray_ROIs(Q, ['z'], ROI_descs['z'], reduce_fun)
+QROI['xy'] = roi.calc_dataset_ROIs(Q, ['x', 'ya'], ROI_descs['xy'], reduce_fun)
+QROI['zy'] = roi.calc_dataset_ROIs(Q, ['z', 'ya'], ROI_descs['zy'], reduce_fun)
+QROI['x'] = roi.calc_dataset_ROIs(Q, ['x'], ROI_descs['x'], reduce_fun)
+QROI['y'] = roi.calc_dataset_ROIs(Q, ['ya'], ROI_descs['y'], reduce_fun)
+QROI['z'] = roi.calc_dataset_ROIs(Q, ['z'], ROI_descs['z'], reduce_fun)
+#QROI['xz'] = roi.calc_dataset_ROIs(Q, ['x', 'z'], ROI_descs['xz'], reduce_fun)
 
-QROI2 = {}
-QROI2['xy'] = roi.calc_xarray_ROIs(QROI['y'], ['x'], ROI_descs['x'],
+QROI['y->x'] = roi.calc_dataset_ROIs(QROI['y'], ['x'], ROI_descs['x'],
                                    reduce_fun, ROIset_dim_to_combine='yROI')
-QROI2['xz'] = roi.calc_xarray_ROIs(QROI['z'], ['x'], ROI_descs['x'],
+QROI['z->x'] = roi.calc_dataset_ROIs(QROI['z'], ['x'], ROI_descs['x'],
                                    reduce_fun, ROIset_dim_to_combine='zROI')
-QROI2['yx'] = roi.calc_xarray_ROIs(QROI['x'], ['ya'], ROI_descs['y'],
+QROI['x->y'] = roi.calc_dataset_ROIs(QROI['x'], ['ya'], ROI_descs['y'],
                                    reduce_fun, ROIset_dim_to_combine='xROI')
-QROI2['yz'] = roi.calc_xarray_ROIs(QROI['z'], ['ya'], ROI_descs['y'],
+QROI['z->y'] = roi.calc_dataset_ROIs(QROI['z'], ['ya'], ROI_descs['y'],
                                    reduce_fun, ROIset_dim_to_combine='zROI')
-QROI2['zx'] = roi.calc_xarray_ROIs(QROI['x'], ['z'], ROI_descs['z'],
+QROI['x->z'] = roi.calc_dataset_ROIs(QROI['x'], ['z'], ROI_descs['z'],
                                    reduce_fun, ROIset_dim_to_combine='xROI')
-QROI2['zy'] = roi.calc_xarray_ROIs(QROI['y'], ['z'], ROI_descs['z'],
+QROI['y->z'] = roi.calc_dataset_ROIs(QROI['y'], ['z'], ROI_descs['z'],
                                    reduce_fun, ROIset_dim_to_combine='yROI')
 
-QROI3 = {}
-QROI3['xyz'] = roi.calc_xarray_ROIs(QROI2['yz'], ['x'], ROI_descs['x'],
-                                    reduce_fun, ROIset_dim_to_combine='yzROI')
-QROI3['zxy'] = roi.calc_xarray_ROIs(QROI2['xy'], ['z'], ROI_descs['z'],
-                                    reduce_fun, ROIset_dim_to_combine='xyROI')
+QROI['x->y->z'] = roi.calc_dataset_ROIs(QROI['x->y'], ['z'], ROI_descs['z'],
+                                   reduce_fun,
+                                   ROIset_dim_to_combine=['y', 'x'])
 
 print('\n====  Original  ====')
 print(Q)
@@ -154,18 +177,16 @@ print(Q)
 for ROI_name, qROI in QROI.items():
     print(f'\n====  ROI: {ROI_name}  ====')
     print(qROI)
-    
-print('\n====================')
-for ROI_name, qROI in QROI2.items():
+
+ROI_names = ['xy', 'y->x', 'x->y->z']
+for ROI_name in ROI_names:
     print(f'\n====  ROI: {ROI_name}  ====')
-    print(qROI)
-    
-print('\n====================')
-for ROI_name, qROI in QROI3.items():
-    print(f'\n====  ROI: {ROI_name}  ====')
-    print(qROI)
-    print('Coordinates:')
-    for coord_name, coord_vals in qROI.coords.items():
-        print(coord_name)
-        print(coord_vals.values)
+    for var_name, var_data in QROI[ROI_name].data_vars.items():
+        print(f'\n==  VAR: {var_name}  ==')
+        print(var_data)
+        print('Coordinates:')
+        for coord_name, coord_vals in var_data.coords.items():
+            print(coord_name)
+            print(coord_vals.values)
+        
 

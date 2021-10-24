@@ -5,7 +5,7 @@ Created on Mon Sep  6 20:02:16 2021
 @author: Nikita
 """
 
-
+import importlib
 import itertools
 import os
 import sys
@@ -18,7 +18,8 @@ dirpath_pkg = os.path.dirname(dirpath_file)
 sys.path.append(dirpath_pkg)
 
 #import useful as usf
-import data_proc_common as dpc
+import roi_utils as roi
+importlib.reload(roi)
 
 
 # Create test 3-d DataArray's that contains in a cell with the
@@ -68,7 +69,7 @@ X = xr.DataArray(x, coords=coords, dims=dims)
 # dim_name_new = 'xyROI_num'
 # coord_names_new = ['xyROI_num']
 # 
-# Y = dpc.combine_xarray_dimensions(X, dims_to_combine=dims_to_combine,
+# Y = roi.combine_xarray_dimensions(X, dims_to_combine=dims_to_combine,
 #                                   dim_name_new=dim_name_new,
 #                                   coord_names_new=coord_names_new,
 #                                   coord_val_generator=None)
@@ -138,11 +139,11 @@ test_data_lst = [
 
 for test_num, test_data in enumerate(test_data_lst):
 
-    Y = dpc.combine_xarray_dimensions(
+    Y = roi.combine_xarray_dimensions(
             X, dims_to_combine=test_data['dims_to_combine'],
             dim_name_new=test_data['dim_name_new'],
             coord_names_new=test_data['coord_names_new'],
-            coord_val_generator=dpc.coord_val_generator_ROI)
+            coord_val_generator=roi.coord_val_generator_ROI)
 
     print(f'======= TEST 2.{test_num+1} =======\n\n')
     print(f'{X}\n\n{Y}\n\n')

@@ -3,6 +3,7 @@
 
 """
 
+import importlib
 import itertools
 import os
 import sys
@@ -15,7 +16,8 @@ dirpath_pkg = os.path.dirname(dirpath_file)
 sys.path.append(dirpath_pkg)
 
 #import useful as usf
-import data_proc_common as dpc
+import roi_utils as roi
+importlib.reload(roi)
 
 
 # Reducing functions used for testing data_proc_common::calc_xarray_ROIs()
@@ -142,12 +144,12 @@ for test_num in range(4):
     # For the string array, combine ROI elements by string concatenation
     reduce_fun = lambda Z, dims: reduce_fun_xarray(Z, dims,
                                                    reduce_fun_1d_strjoin)
-    Ys = dpc.calc_xarray_ROIs(Xs, 'ROI', ROI_coords[test_num],
+    Ys = roi.calc_xarray_ROIs(Xs, ROI_coords[test_num],
                               ROI_descs[test_num], reduce_fun)
     
     # For the integer array, combine ROI elements by summation
     reduce_fun = lambda Z, dims: Z.sum(dim=dims)
-    Y = dpc.calc_xarray_ROIs(X, 'ROI', ROI_coords[test_num],
+    Y = roi.calc_xarray_ROIs(X, ROI_coords[test_num],
                              ROI_descs[test_num], reduce_fun)
 
     print(f'======= TEST {test_num} =======\n\n')

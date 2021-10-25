@@ -189,4 +189,3 @@ for ROI_name in ROI_names:
             print(coord_name)
             print(coord_vals.values)
         
-

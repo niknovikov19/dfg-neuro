@@ -66,7 +66,7 @@ cell_info = run_or_load(
 
 
 # Get all channels
-chan_info = lfp.get_all_channels(dirpath_data_root)
+chan_info = usf.get_all_channels(dirpath_data_root)
 
 # Mask for used channels
 #chan_mask = [id in chans_used for id in chan_info.chan_id]

@@ -160,4 +160,25 @@ def dict_remove(d, key):
     """
     if key in d:
         d.pop(key)
-    
+
+
+def flatten_dict(dictionary, level = []):
+    tmp_dict = {}
+    for key, val in dictionary.items():
+        if type(val) == dict:
+            tmp_dict.update(flatten_dict(val, level + [key]))
+        else:
+            tmp_dict['.'.join(level + [key])] = val
+    return tmp_dict
+
+def unflatten_dict(dictionary):
+    resultDict = dict()
+    for key, value in dictionary.items():
+        parts = key.split('.')
+        d = resultDict
+        for part in parts[:-1]:
+            if part not in d:
+                d[part] = dict()
+            d = d[part]
+        d[parts[-1]] = value
+    return resultDict    

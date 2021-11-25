@@ -10,9 +10,11 @@ import re
 from more_itertools import unique_everseen
 import numpy as np
 #import pandas as pd
+from tqdm import tqdm
 import xarray as xr
 
-#import useful as usf
+import useful as usf
+import data_file_group as dfg
 
 
 def get_xarrray_dim_by_coord(X, coord):
@@ -560,7 +562,70 @@ def calc_dataset_ROIs(X_in: xr.Dataset, ROI_coords, ROI_descs,
 # This would allow correct ROI naming for dataset variables that do not have
 # all the dimensions given in the ROI description
 
-# TODO: Raise error if ROI coord is not present  
+# TODO: Raise error if ROI coord is not present
+
+
+def reduce_fun_mean(X, dims):
+    return X.mean(dim=dims)
+
+
+def calc_data_file_group_ROIs(dfg_in: dfg.DataFileGroup,
+                              ROI_coords, ROI_descs,
+                              reduce_fun=reduce_fun_mean,
+                              ROIset_dim_to_combine=None,
+                              ROIset_dim_name=None,
+                              fpath_data_column=None,
+                              fpath_data_postfix=None) -> dfg.DataFileGroup:
+
+    proc_step_name = 'ROI calculation (%s)' % ', '.join(ROI_coords)
     
+    # Dictionary of parameters
+    param_names = ['ROI_coords', 'ROI_descs', 'reduce_fun',
+                   'ROIset_dim_to_combine', 'ROIset_dim_name']
+    params = {par_name: eval(par_name) for par_name in param_names}
     
+    # Name of the dfg's outer table column for the paths to Dataset files
+    if fpath_data_column is None:
+        ROI_str = ''.join(ROI_coords) + 'ROI'
+        fpath_data_column = dfg_in.get_data_desc()['fpath_data_column']
+        fpath_data_column += ROI_str
+        
+    # Postfix added to the output inner data files
+    if fpath_data_postfix is None:
+        fpath_data_postfix = ''.join(ROI_coords) + 'ROI'
+
+    # Function that converts the parameters dict to the form suitable
+    # for storing into a processing step description
+    def gen_proc_step_params(par):
+        par_out = {
+            'ROI_coords': {
+                'desc': 'Coordinates to collapse into ROIs',
+                'value': par['ROI_coords']},
+            'ROI_descs': {
+                'desc': 'Names and coordinate ranges of the ROIs',
+                'value': par['ROI_descs']},
+            'reduce_fun': {
+                'desc': ('Function for converting input values that belong'
+                         'to a ROI into a sinle output value'),
+                'value': par['reduce_fun'].__name__},
+            'ROIset_dim_to_combine': {
+                'desc': 'Old ROI dimension to combine the result with',
+                'value': str(par['ROIset_dim_to_combine'])},
+            'ROIset_dim_name': {
+                'desc': 'Name of the new ROI dimension',
+                'value': str(par['ROIset_dim_name'])}
+        }
+        return par_out
+    
+    # Function for converting input to output inner data path
+    def gen_fpath(fpath_in, params):
+        return fpath_in + '_' + fpath_data_postfix
+    
+    dfg_out = dfg.apply_dfg_inner_proc(
+            dfg_in, calc_dataset_ROIs, params, proc_step_name,
+            gen_proc_step_params, fpath_data_column, gen_fpath)
+    
+    return dfg_out
+    
+
     

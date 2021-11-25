@@ -5,14 +5,17 @@ Created on Tue Mar 30 18:36:11 2021
 @author: Nikita
 """
 
+import inspect
 import os
-import numpy as np
-import xarray as xr
 import re
+
+import numpy as np
 import pandas as pd
+import xarray as xr
 
 
-def generate_fpath_out(fpath_in, postfix, ext='nc', dirpath_out=None, add_fname_in=True):
+def generate_fpath_out(fpath_in, postfix, ext='nc', dirpath_out=None,
+                       add_fname_in=True):
     
     if dirpath_out==None:
         dirpath_out = os.path.split(fpath_in)[0]
@@ -59,7 +62,8 @@ def get_chan_by_cell(cell_name, cell_info_tbl, chan_info_tbl):
     chan_name = chan_info_tbl[mask].chan_name.item()
     return chan_name
 
-def get_chan_idx_by_cell_names(cell_names, chan_names, cell_info_tbl, chan_info_tbl):
+def get_chan_idx_by_cell_names(cell_names, chan_names, cell_info_tbl,
+                               chan_info_tbl):
     Ncell = len(cell_names)
     chan_idx = np.zeros(Ncell, dtype=np.int64)
     for n in range(Ncell):
@@ -79,7 +83,8 @@ def load_xarray(fpath_in, unpack=True):
 
 def get_trial_info_by_sess(trial_info, subj_name, sess_id):
     for n in range(len(trial_info)):
-        if (trial_info[n]['subj_name'] == subj_name) and (trial_info[n]['sess_id'] == sess_id):
+        if ((trial_info[n]['subj_name'] == subj_name) and \
+            (trial_info[n]['sess_id'] == sess_id)):
             return trial_info[n]
     return None
 
@@ -111,7 +116,8 @@ def get_all_channels(dirpath_root):
                 sess_id = date_str + '_' + str(sess_id_local)
                 chan_name = '%s_%s_ch%i' % (subj_name, sess_id, chan_id)
                 
-                entry = pd.DataFrame([[chan_name, subj_name, sess_id, chan_id, fpath_lfp]], columns=col_names)
+                entry = pd.DataFrame([[chan_name, subj_name, sess_id, chan_id, fpath_lfp]],
+                                     columns=col_names)
                 chan_tbl = chan_tbl.append(entry)
                 
                 chan_id = chan_id + 1
@@ -139,7 +145,8 @@ def get_cell_channels(cell_info):
         dirpath_lfp = os.path.split(dirpath_lfp)[0]
         fpath_lfp = os.path.join(dirpath_lfp, 'lowpass.mat')
         
-        chan_info_cur = pd.DataFrame([[chan_name, subj_name, sess_id, chan_id, fpath_lfp]], columns=col_names)
+        chan_info_cur = pd.DataFrame([[chan_name, subj_name, sess_id, chan_id, fpath_lfp]],
+                                     columns=col_names)
         chan_info = chan_info.append(chan_info_cur)
         
     chan_info = chan_info.drop_duplicates()
@@ -182,3 +189,15 @@ def unflatten_dict(dictionary):
             d = d[part]
         d[parts[-1]] = value
     return resultDict    
+
+
+def get_kwargs():
+    frame = inspect.currentframe().f_back
+    keys, _, _, values = inspect.getargvalues(frame)
+    kwargs = {}
+    for key in keys:
+        if key != 'self':
+            kwargs[key] = values[key]
+    return kwargs
+
+

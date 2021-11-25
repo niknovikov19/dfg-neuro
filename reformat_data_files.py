@@ -135,7 +135,7 @@ data_desc = dfg.get_data_desc()
 
 pbar = tqdm(total=len(dfg.outer_table))
 
-for index, entry in dfg.get_table_entries():
+for entry in dfg.get_table_entries():
     
     # Load dataset
     X = dfg.load_inner_data(entry)

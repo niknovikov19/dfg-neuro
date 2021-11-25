@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 
-import importlib
-import itertools
+import copy
+#import importlib
+#import itertools
 import os
 import sys
 
-import numpy as np
+#import numpy as np
 import pandas as pd
 import pickle
-from pprint import pprint
+#from pprint import pprint
+from tqdm import tqdm
 import xarray as xr
 
 dirpath_file = os.path.dirname(os.path.abspath(__file__))
@@ -84,7 +86,12 @@ class DataFileGroup:
         return self.data_proc_tree.get_last_step()['data_desc_out']
     
     def get_table_entries(self):
-        return self.outer_table.iterrows()
+        entries = list(self.outer_table.iterrows())
+        entries = [entry[1] for entry in entries]
+        return entries
+    
+    def get_num_table_entries(self):
+        return len(self.outer_table.iterrows())
     
     def get_inner_data_path(self, table_entry):
         data_desc = self.get_data_desc()
@@ -131,6 +138,12 @@ class DataFileGroup:
             }
         return attrs
     
+    def set_inner_data_attrs(self, table_entry, X):
+        attrs = self.make_inner_data_attrs(table_entry)
+        X.attrs = usf.flatten_dict(attrs)
+        for var in X.data_vars.values():
+            var.attrs.clear()
+    
     def save(self, fpath_out):
         with open(fpath_out, 'wb') as fid:
             pickle.dump(self, fid)
@@ -140,4 +153,112 @@ class DataFileGroup:
             obj = pickle.load(fid)
         self.data_proc_tree = obj.data_proc_tree
         self.outer_table = obj.outer_table
+
+
+def make_data_desc(data_desc_old, var_names, fpath_data_column,
+                   inner_dim_names, inner_coord_names,
+                   vars_new_descs, coords_new_descs):
+    
+    data_desc_new = {}
+    
+    # Name of the column in the outer table with the paths to inner data
+    data_desc_new['fpath_data_column'] = fpath_data_column
+    
+    # Outer dims and coords - from the old description
+    data_desc_new['outer_dims'] = data_desc_old['outer_dims']
+    data_desc_new['outer_coords'] = data_desc_old['outer_coords']
+    
+    # Names of inner vars, dims, and coords
+    data_desc_new['variables'] = {
+            var_name: '' for var_name in var_names}
+    data_desc_new['inner_dims'] = inner_dim_names
+    data_desc_new['inner_coords'] = {
+            coord_name: '' for coord_name in inner_coord_names}
+    
+    # Var descriptions - try take from the argument or from old data desc
+    var_descs_out = data_desc_new.variables
+    var_descs_in = data_desc_old.variables
+    for var_name in var_descs_out:
+        if var_name in vars_new_descs:
+            var_descs_out[var_name] = vars_new_descs[var_name]
+        elif var_name in var_descs_in:
+            var_descs_out[var_name] = var_descs_in[var_name]
+            
+    # Coord descriptions - try take from the argument or from old data desc
+    coord_descs_out = data_desc_new.inner_coords
+    coord_descs_in = data_desc_old.inner_coords
+    for coord_name in coord_descs_out:
+        if coord_name in coords_new_descs:
+            coord_descs_out[coord_name] = coords_new_descs[coord_name]
+        elif coord_name in coord_descs_in:
+            coord_descs_out[coord_name] = coord_descs_in[coord_name]
+            
+    return data_desc_new
+
+
+def apply_dfg_inner_proc(dfg_in: DataFileGroup,
+                         inner_proc: 'function', params: dict, 
+                         proc_step_name: str, gen_proc_step_params: 'function',
+                         fpath_data_column: str, gen_fpath: 'function',
+                         vars_new_descs={}, coords_new_descs={}):
+    
+    dfg_out = copy.deepcopy(dfg_in)
+    
+    # Add to the outer table a column that will contain paths
+    # to the output Dataset files
+    outer_tbl_out = dfg_out.outer_table
+    outer_tbl_out.insert(len(outer_tbl_out.columns), fpath_data_column, '')
+    
+    # Initialize progress bar
+    pbar = tqdm(total=dfg_in.get_num_table_entries())
+    
+    need_init = True
+
+    for entry in dfg_out.get_table_entries():
+    
+        # Load dataset
+        X_in = dfg_in.load_inner_data(entry)
         
+        # Perform inner procedure
+        X_out = inner_proc(X_in, **params)
+        
+        # After the first call of the inner procedure: 
+        # 1. Create a desciption of the new data based on:
+        #    - description of the old data (from dfg_in)
+        #    - properties of the newly generated Dataset (X_out)
+        #    - additional arguments (vars_new_descs, coords_new_descs,
+        #      and fpath_data_column)
+        # 2. Create a description of the new processing step (including
+        #    the description of the new data)
+        # 3. Add the new step to the data processing tree
+        # 4. Put a copy of the data description and the data processing tree
+        #    into the attributes of the outer table
+        if need_init:            
+            data_desc_out = make_data_desc(
+                    dfg_in.get_data_desc(), list(X_out.data_vars),
+                    fpath_data_column, list(X_out.dims), list(X_out.coords),
+                    vars_new_descs, coords_new_descs)
+            proc_func_name = 'INNER: ' + inner_proc.__name__
+            dfg_out.data_proc_tree.add_process_step(
+                    proc_step_name, proc_func_name,
+                    gen_proc_step_params(params), data_desc_out)
+            dfg_out.outer_table.attrs = usf.flatten_dict(
+                    dfg_out.make_data_attrs())
+            need_init = False
+        
+        # Set attributes of the new dataset
+        dfg_out.set_inner_data_attrs(entry, X_out)
+        
+        # Save new dataset and store the path into outer_table
+        fpath_in = dfg_in.get_inner_data_path(entry)
+        fpath_out = gen_fpath(fpath_in, params)
+        dfg_out.save_inner_data(entry, X_out, fpath_out)
+    
+        pbar.update()
+   
+    pbar.close()
+    
+    return dfg_out
+
+
+

@@ -100,7 +100,6 @@ proc_steps = {
                 'name_old': 'tf_win_overlap'},
         }
     }
-        
 }
             
 fpath_dfg_in = (r'H:\WORK\Camilo\Processing_Pancake_2sess_allchan' 
@@ -113,6 +112,7 @@ dfg = DataFileGroup()
 # Load description of a data file group
 with open(fpath_dfg_in, 'rb') as fid:
     dfg.outer_table = pickle.load(fid)
+    dfg.init_outer_indices()
 
 # Get parameter values from the table attributes and store them into
 # the processing steps list 'proc_steps'
@@ -146,10 +146,7 @@ for entry in dfg.get_table_entries():
     X = X.rename_vars({'__xarray_dataarray_variable__': var_name})
     
     # Set dataset attributes
-    attrs = dfg.make_inner_data_attrs(entry)
-    X.attrs = usf.flatten_dict(attrs)
-    for var in X.data_vars.values():
-        var.attrs.clear()
+    dfg.set_inner_data_attrs(entry, X)
         
     # Resave dataset
     fpath_data = dfg.get_inner_data_path(entry)
@@ -165,6 +162,7 @@ pbar.close()
 #fpath = fpath_out
 #Q = xr.load_dataset(fpath, engine='h5netcdf')
 
+# Fill the outer table attributes
 dfg.outer_table.attrs = usf.flatten_dict(dfg.make_data_attrs())
 dfg.save(fpath_dfg_out)
 
@@ -172,4 +170,6 @@ dfg = None
 dfg = DataFileGroup()
 dfg.load(fpath_dfg_out)
 
+# TODO: does this work correctly, given that get_table_entries() returns
+# copies, not references to the rows of pandas table?
 

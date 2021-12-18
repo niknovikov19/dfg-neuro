@@ -106,7 +106,7 @@ Q = xr.Dataset({'Qxyz': Qxyz, 'Qyz': Qyz, 'Qxz': Qxz, 'Qxy': Qxy})
 
 ROI_descs = {}
 
-# Test 1: reduce (dim0, dim2)
+# ROI descriptions
 ROI_descs['x'] = [
         {'name': 'xROI0', 'limits': {'x': (0, 1)}},
         {'name': 'xROI1', 'limits': {'x': (1, 1)}},

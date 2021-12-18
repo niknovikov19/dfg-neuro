@@ -6,7 +6,7 @@ import copy
 import os
 import sys
 
-#import numpy as np
+import numpy as np
 import pandas as pd
 import pickle
 #from pprint import pprint
@@ -70,6 +70,8 @@ class DataProcTree:
         
     def get_parent_steps(self, step_id):
         step_num = self._step_num_by_id(step_id)
+        if step_num == 0:
+            return []
         step_id_prev = self._step_id_by_num(step_num - 1)
         step_prev = self.proc_steps[self.branch_id][step_id_prev]
         return [step_prev]
@@ -82,21 +84,64 @@ class DataFileGroup:
         self.outer_table = pd.DataFrame()
         self.data_proc_tree = DataProcTree()
         
+    def create(self, root_proc_step):        
+        # Create empty outer table with columns for outer coords
+        # and a column for paths to inner data files
+        data_desc = root_proc_step['data_desc_out']
+        outer_coords = list(data_desc['outer_coords'].keys())
+        #TODO: check that outer_dims are a subset of outer_coords
+        col_names = outer_coords + [data_desc['fpath_data_column']]
+        self.outer_table = pd.DataFrame(columns=col_names)        
+        # Create the first processing step description
+        self.data_proc_tree.add_process_step(
+                root_proc_step['name'], root_proc_step['function'],
+                root_proc_step['params'], root_proc_step['data_desc_out'])
+        
+    def create2(self, proc_steps):
+        # Create the processing tree
+        # TODO: all branches
+        for step in proc_steps['(1)'].values():
+            self.data_proc_tree.add_process_step(
+                    step['name'], step['function'], step['params'],
+                    step['data_desc_out'])
+        # Create outer table
+        data_desc = self.get_data_desc()
+        col_names = list(data_desc['outer_coords'].keys())
+        for step in proc_steps['(1)'].values():
+            fpath_data_column = step['data_desc_out']['fpath_data_column']
+            col_names.append(fpath_data_column)
+        self.outer_table = pd.DataFrame(columns=col_names) 
+        
+    def add_entry(self, outer_coords, X, fpath_data):
+        # TODO: check that dimension vals' combinations do not repeat
+        # Create new entry in the outer table
+        new_entry_data = outer_coords.copy()
+        new_entry_data.update({self.get_fpath_data_column_name(): ''})
+        self.outer_table = self.outer_table.append(new_entry_data,
+                                                   ignore_index=True)
+        table_entry = self.get_last_table_entry()
+        # Save inner data and store the corresponding path into outer_table
+        self.set_inner_data_attrs(table_entry, X)
+        self.save_inner_data(table_entry, X, fpath_data)        
+        
     def get_data_desc(self):
         return self.data_proc_tree.get_last_step()['data_desc_out']
+
+    def get_num_table_entries(self):
+        return len(self.outer_table)
     
     def get_table_entries(self):
-        entries = list(self.outer_table.iterrows())
-        entries = [entry[1] for entry in entries]
-        return entries
+        return self.outer_table.index.to_list()
     
-    def get_num_table_entries(self):
-        return len(self.outer_table.iterrows())
+    def get_last_table_entry(self):
+        return self.get_table_entries()[-1]
+    
+    def get_fpath_data_column_name(self):
+        return self.get_data_desc()['fpath_data_column']
     
     def get_inner_data_path(self, table_entry):
-        data_desc = self.get_data_desc()
-        fpath_data = table_entry[data_desc['fpath_data_column']]
-        return fpath_data
+        column_name = self.get_fpath_data_column_name()
+        return self.outer_table.at[table_entry, column_name]
     
     def load_inner_data(self, table_entry):
         fpath_data = self.get_inner_data_path(table_entry)
@@ -104,8 +149,8 @@ class DataFileGroup:
         return X
     
     def save_inner_data(self, table_entry, X, fpath_out):
-        data_desc = self.get_data_desc()
-        table_entry[data_desc['fpath_data_column']] = fpath_out
+        column_name = self.get_fpath_data_column_name()
+        self.outer_table.at[table_entry, column_name] = fpath_out
         X.to_netcdf(fpath_out, engine='h5netcdf')
         
     def make_data_attrs(self):
@@ -122,14 +167,16 @@ class DataFileGroup:
         data_desc = self.get_data_desc()
         # Names and values of the outer coords for the given table entry
         outer_coord_vals = {
-                dim_name: table_entry[dim_name]
+                dim_name: self.outer_table.at[table_entry, dim_name]
                 for dim_name in data_desc['outer_dims']}
         # Parent files
         last_step_id = self.data_proc_tree.get_last_step_id()
         parent_steps = self.data_proc_tree.get_parent_steps(last_step_id)
         parent_columns = [step['data_desc_out']['fpath_data_column']
                         for step in parent_steps]
-        parent_files = [table_entry[col_name] for col_name in parent_columns]
+        parent_files = [
+                self.outer_table.at[table_entry, col_name]
+                for col_name in parent_columns]
         attrs = {
             'data_desc': data_desc,
             'proc_steps': self.data_proc_tree.proc_steps,
@@ -148,11 +195,18 @@ class DataFileGroup:
         with open(fpath_out, 'wb') as fid:
             pickle.dump(self, fid)
             
+    def init_outer_indices(self):
+        num_entries = len(self.outer_table)
+        self.outer_table.set_index(np.arange(num_entries), inplace=True)        
+            
     def load(self, fpath_in):
         with open(fpath_in, 'rb') as fid:
             obj = pickle.load(fid)
         self.data_proc_tree = obj.data_proc_tree
         self.outer_table = obj.outer_table
+        # Fix un-initialized indices
+        if np.all(self.outer_table.index == 0):
+            self.init_outer_indices()
 
 
 def make_data_desc(data_desc_old, var_names, fpath_data_column,
@@ -176,22 +230,24 @@ def make_data_desc(data_desc_old, var_names, fpath_data_column,
             coord_name: '' for coord_name in inner_coord_names}
     
     # Var descriptions - try take from the argument or from old data desc
-    var_descs_out = data_desc_new.variables
-    var_descs_in = data_desc_old.variables
+    var_descs_out = data_desc_new['variables']
+    var_descs_in = data_desc_old['variables']
     for var_name in var_descs_out:
-        if var_name in vars_new_descs:
-            var_descs_out[var_name] = vars_new_descs[var_name]
-        elif var_name in var_descs_in:
+        if var_name in var_descs_in:
             var_descs_out[var_name] = var_descs_in[var_name]
+        if vars_new_descs is not None:
+            if var_name in vars_new_descs:
+                var_descs_out[var_name] = vars_new_descs[var_name]
             
     # Coord descriptions - try take from the argument or from old data desc
-    coord_descs_out = data_desc_new.inner_coords
-    coord_descs_in = data_desc_old.inner_coords
+    coord_descs_out = data_desc_new['inner_coords']
+    coord_descs_in = data_desc_old['inner_coords']
     for coord_name in coord_descs_out:
-        if coord_name in coords_new_descs:
-            coord_descs_out[coord_name] = coords_new_descs[coord_name]
-        elif coord_name in coord_descs_in:
+        if coord_name in coord_descs_in:
             coord_descs_out[coord_name] = coord_descs_in[coord_name]
+        if coords_new_descs is not None:
+            if coord_name in coords_new_descs:
+                coord_descs_out[coord_name] = coords_new_descs[coord_name]
             
     return data_desc_new
 
@@ -200,7 +256,7 @@ def apply_dfg_inner_proc(dfg_in: DataFileGroup,
                          inner_proc: 'function', params: dict, 
                          proc_step_name: str, gen_proc_step_params: 'function',
                          fpath_data_column: str, gen_fpath: 'function',
-                         vars_new_descs={}, coords_new_descs={}):
+                         vars_new_descs=None, coords_new_descs=None):
     
     dfg_out = copy.deepcopy(dfg_in)
     
@@ -259,6 +315,4 @@ def apply_dfg_inner_proc(dfg_in: DataFileGroup,
     pbar.close()
     
     return dfg_out
-
-
 

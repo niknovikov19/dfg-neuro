@@ -80,9 +80,11 @@ class DataProcTree:
 class DataFileGroup:
     "Representation of data stored in multiple files."
     
-    def __init__(self):
+    def __init__(self, fpath_in=None):
         self.outer_table = pd.DataFrame()
         self.data_proc_tree = DataProcTree()
+        if fpath_in is not None:
+            self.load(fpath_in)
         
     def create(self, root_proc_step):        
         # Create empty outer table with columns for outer coords

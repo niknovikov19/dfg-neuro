@@ -99,8 +99,6 @@ def reduce_fun(X, dims):
 
 # Calculate ROIs    
 ROI_coords = list(ROI_descs[0]['limits'].keys())
-fpath_data_column = 'fpath_tfROI'
-fpath_data_postfix = 'tfROI'
 var_renamings = {'TF': {'name': 'TFpow', 'desc': 'Time-frequency power'}}
 coords_new_descs = {'tfROI_num': 'Time-frequency ROI'}
 dfg_tfroi = roi.calc_data_file_group_ROIs(

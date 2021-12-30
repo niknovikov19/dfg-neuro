@@ -171,21 +171,24 @@ QROI['x->y->z'] = roi.calc_dataset_ROIs(QROI['x->y'], ['z'], ROI_descs['z'],
                                    reduce_fun,
                                    ROIset_dim_to_combine=['y', 'x'])
 
-print('\n====  Original  ====')
-print(Q)
-
-for ROI_name, qROI in QROI.items():
-    print(f'\n====  ROI: {ROI_name}  ====')
-    print(qROI)
-
-ROI_names = ['xy', 'y->x', 'x->y->z']
-for ROI_name in ROI_names:
-    print(f'\n====  ROI: {ROI_name}  ====')
-    for var_name, var_data in QROI[ROI_name].data_vars.items():
-        print(f'\n==  VAR: {var_name}  ==')
-        print(var_data)
-        print('Coordinates:')
-        for coord_name, coord_vals in var_data.coords.items():
-            print(coord_name)
-            print(coord_vals.values)
+# Save the results
+fpath_out = r'H:\WORK\Camilo\TEST\ROI_test\dataset_ROI_test.txt'
+with open(fpath_out, 'w') as fid:
+    print('\n====  Original  ====', file=fid)
+    print(Q, file=fid)
+    
+    for ROI_name, qROI in QROI.items():
+        print(f'\n====  ROI: {ROI_name}  ====', file=fid)
+        print(qROI, file=fid)
+    
+    ROI_names = ['xy', 'y->x', 'x->y->z']
+    for ROI_name in ROI_names:
+        print(f'\n====  ROI: {ROI_name}  ====', file=fid)
+        for var_name, var_data in QROI[ROI_name].data_vars.items():
+            print(f'\n==  VAR: {var_name}  ==', file=fid)
+            print(var_data, file=fid)
+            print('Coordinates:', file=fid)
+            for coord_name, coord_vals in var_data.coords.items():
+                print(coord_name, file=fid)
+                print(coord_vals.values, file=fid)
         

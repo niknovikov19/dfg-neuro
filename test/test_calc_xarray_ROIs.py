@@ -144,12 +144,12 @@ for test_num in range(4):
     # For the string array, combine ROI elements by string concatenation
     reduce_fun = lambda Z, dims: reduce_fun_xarray(Z, dims,
                                                    reduce_fun_1d_strjoin)
-    Ys = roi.calc_xarray_ROIs(Xs, ROI_coords[test_num],
+    Ys, _ = roi.calc_xarray_ROIs(Xs, ROI_coords[test_num],
                               ROI_descs[test_num], reduce_fun)
     
     # For the integer array, combine ROI elements by summation
     reduce_fun = lambda Z, dims: Z.sum(dim=dims)
-    Y = roi.calc_xarray_ROIs(X, ROI_coords[test_num],
+    Y, _ = roi.calc_xarray_ROIs(X, ROI_coords[test_num],
                              ROI_descs[test_num], reduce_fun)
 
     print(f'======= TEST {test_num} =======\n\n')

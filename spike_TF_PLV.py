@@ -6,18 +6,17 @@ Created on Sat Feb 27 22:03:10 2021
 """
 
 import os
+import time
+
 import numpy as np
 #import h5py
-#import scipy as sc
+import scipy
 #import scipy.signal as sig
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 #import sys
 #import pandas as pd
 import xarray as xr
 import pickle as pk
-#from timeit import default_timer as timer
-#import pycorrelate as pycor
-import time
 
 import data_file_group as dfg
 #import firing_rate as fr
@@ -189,4 +188,87 @@ def calc_dfg_spike_TF_PLV(dfg_in, cell_epoched_info, tROI_descs,
     return dfg_out
 
 
+def _calc_dfg_spPLV_trial_stat_inner(X_in):
+    
+    # TODO: check X_in dimensions:
+    # X_in.PLV: fROI x tROI x trial x cell
+    # X_in.Nspikes: tROI x trial x cell
+   
+    # Total number of spikes in all trials
+    Nspikes = X_in['Nspikes'].sum(dim='trial_num')
+    
+    # PLV averaged over spikes (taken from a time ROI at all trials),
+    # individually for each time ROI and cell (PLV averaging ofer freqs
+    # is assumed to be already done at this moment)
+    PLV = (X_in['PLV'] * X_in['Nspikes']).sum(dim='trial_num') / Nspikes
+    
+    # Total number of spikes, assuming that each spike counts separatly
+    # in each freq ROI (it is used for p-value calculation)
+    Nspikes_total = X_in['ROI_sz_fROI'] * Nspikes
+    
+    # Parameters of distribution of vector lengths (each vector is an average
+    # of many random unit-length vectors)
+    sigma0 = 1 / np.sqrt(2 * Nspikes_total)
+    #sigma0 = 1 / np.sqrt(2 * Nspikes)
+    sigma = sigma0 * np.sqrt(2 - np.pi / 2)
+    mu = sigma0 * np.sqrt(np.pi / 2)
 
+    # Calculate p-values for the absolute PLV's    
+    PLV_abs = np.abs(PLV)
+    PLV_pval = 1 - scipy.stats.norm.cdf(PLV_abs-mu, scale=sigma)
+    PLV_pval_xr = xr.DataArray(PLV_pval, dims=PLV.dims, coords=PLV.coords)
+    
+    # Calculate firing rates
+    d = usf.unflatten_dict(X_in.attrs)
+    tROI_str_descs = d['proc_steps']['(1)']['3']['params']['ROI_descs']['value']
+    firing_rate = X_in['Nspikes'].mean(dim='trial_num')
+    for tROI_str in tROI_str_descs:
+        tROI = eval(tROI_str)
+        time_limits = tROI['limits']['time']
+        T = time_limits[1] - time_limits[0]
+        firing_rate[firing_rate.tROI_name==tROI['name']] /= T
+    
+    # Collect the output dataset
+    data_vars = {'PLV': PLV,
+                 'Nspikes': Nspikes,
+                 'ROI_sz_fROI': X_in['ROI_sz_fROI'],
+                 'PLV_pval': PLV_pval_xr,
+                 'firing_rate': firing_rate
+                 }
+    X_out = xr.Dataset(data_vars)
+    return X_out
+    
+    
+def calc_dfg_spPLV_trial_stat(dfg_in):
+    
+    proc_step_name = 'Calculate spike-LFP statistics over trials'
+    
+    # Dictionary of parameters
+    params = {}
+    
+    # Descriptions of the new variables
+    vars_new_descs = {
+            'PLV_pval': 'P-value of absolute trial-averaged PLV'
+    }
+    
+    # Name of the dfg's outer table column for the paths to Dataset files
+    fpath_data_column = 'fpath_PLV_pval'
+        
+
+    # Function that converts the parameters dict to the form suitable
+    # for storing into a processing step description
+    def gen_proc_step_params(par):
+        return {}
+    
+    # Function for converting input to output inner data path
+    def gen_fpath(fpath_in, params):
+        fpath_data_postfix = 'pval'
+        fpath_noext, ext  = os.path.splitext(fpath_in)
+        return fpath_noext + '_' + fpath_data_postfix + ext
+    
+    # Call the inner procedure for each inner dataset of the DataFileGroup
+    dfg_out = dfg.apply_dfg_inner_proc(
+            dfg_in, _calc_dfg_spPLV_trial_stat_inner, params, proc_step_name,
+            gen_proc_step_params, fpath_data_column, gen_fpath, vars_new_descs)
+    
+    return dfg_out

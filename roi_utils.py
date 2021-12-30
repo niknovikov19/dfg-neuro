@@ -120,6 +120,9 @@ def _calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
     x_out = np.ndarray(shape=shape_out, dtype=X_in.dtype)
     X_out = xr.DataArray(x_out, coords=coords_out, dims=dims_out)
     
+    # Size of each ROI
+    ROI_sz = np.zeros(len(ROI_descs))
+    
     # Calculate ROI data
     for n, ROI in enumerate(ROI_descs):
         
@@ -134,15 +137,19 @@ def _calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
             
         # Select input slice by the index, process it, and store to the output
         # TODO: Treat the case if X_in[index] is empty
-        if X_in[index].size == 0:
+        sz = X_in[index].size
+        if sz == 0:
             raise ValueError('Empty ROI')
+        # ROI size: number of collapsing bins
+        ROI_sz_vec = np.array([sum(mask) for mask in index.values()])
+        ROI_sz[n] = np.prod(ROI_sz_vec)
         X_out[{dim_new: n}] = reduce_fun(X_in[index], ROI_dims)
         
     # Copy attributes and add info about the operation
     X_out.attrs = X_in.attrs.copy()
     # TODO: attributes
     
-    return X_out, ROIset_dim_name
+    return X_out, ROIset_dim_name, ROI_sz
 
 
 def combine_xarray_dimensions(X_in: xr.DataArray, dims_to_combine,
@@ -438,14 +445,12 @@ def calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
                      ROIset_dim_name=None) -> xr.DataArray:
     """Perform _calc_xarray_ROIs() + combine_xarray_dimensions()."""
     
-    X_out, _ROIset_dim_name = _calc_xarray_ROIs(X_in, ROI_coords, ROI_descs,
-                                                reduce_fun, ROIset_dim_name)
+    X_out, _ROIset_dim_name, ROI_sz = _calc_xarray_ROIs(
+            X_in, ROI_coords, ROI_descs, reduce_fun, ROIset_dim_name)
     
     if ROIset_dim_to_combine is not None:
-        if ROIset_dim_name is None:
-            ROIset_dim_name = _ROIset_dim_name
         r = re.compile('(.+)ROI')
-        dim_name_base_1 = r.findall(ROIset_dim_name)[0]
+        dim_name_base_1 = r.findall(_ROIset_dim_name)[0]
         dim_name_base_2 = r.findall(ROIset_dim_to_combine)[0]
         dim_name_base_new = dim_name_base_1 + dim_name_base_2
         dims_to_combine = [dim_name_base_1 + 'ROI_num',
@@ -457,7 +462,7 @@ def calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
         X_out = combine_xarray_dimensions(X_out, dims_to_combine, dim_name_new,
                               coord_names_new, coord_val_generator_ROI_2)
         
-    return X_out
+    return X_out, {'ROIset_dim_name': _ROIset_dim_name, 'ROI_sz': ROI_sz}
 
 
 def get_combinations(lst: list):
@@ -473,11 +478,17 @@ def get_combinations(lst: list):
 def calc_dataset_ROIs(X_in: xr.Dataset, ROI_coords, ROI_descs,
                      reduce_fun=(lambda X, dims: X.mean(dim=dims)),
                      ROIset_dim_to_combine=None, ROIset_dim_name=None,
-                     var_renamings=None) -> xr.Dataset:
+                     var_renamings=None, preproc_fun=None,
+                     add_ROIsz_vars=False) -> xr.Dataset:
     """Calculate ROIs, optionally merge new ROI dimension with an old one."""
-    X_out_vars = {}
-    for var_name, X_in_var in X_in.data_vars.items():
+    # Preprocess the dataset
+    if preproc_fun is not None:
+        X_in = preproc_fun(X_in)
         
+    ROI_sz_info = {}
+    
+    X_out_vars = {}
+    for var_name, X_in_var in X_in.data_vars.items():        
         # Keep in the ROI desc only those coordinates that the current
         # variable does have
         coords_var = list(X_in_var.coords.keys())
@@ -536,20 +547,43 @@ def calc_dataset_ROIs(X_in: xr.Dataset, ROI_coords, ROI_descs,
             if var_name in var_renamings:
                 var_name_new = var_renamings[var_name]
                 
+        # ROI-reducing function
+        if isinstance(reduce_fun, dict):
+            reduce_fun_cur = reduce_fun[var_name]
+        else:
+            reduce_fun_cur = reduce_fun            
+                
         # Calculate ROIs and combinate with an old ROI dimension (if needed)
         # If no dimensions from the ROI desc are present in the current
         # variable - just copy the variable to the output
         if len(ROI_coords_var) != 0:
-            X_out_vars[var_name_new] = calc_xarray_ROIs(
+            X_out_vars[var_name_new], _ROI_sz_info = calc_xarray_ROIs(
                     X_in_var, ROI_coords_var, ROI_descs_var,
-                    reduce_fun, ROIset_dim_to_combine_var, ROIset_dim_name)
+                    reduce_fun_cur, ROIset_dim_to_combine_var, ROIset_dim_name)
+            # Store ROI size vector
+            dim_name = _ROI_sz_info['ROIset_dim_name']
+            if dim_name in ROI_sz_info:
+                if np.any(ROI_sz_info[dim_name] != _ROI_sz_info['ROI_sz']):
+                    raise ValueError('ROI dimensions with the same name but'
+                                     'different ROI size vectors')
+            ROI_sz_info[dim_name] = _ROI_sz_info['ROI_sz']
         else:
             X_out_vars[var_name_new] = X_in_var.copy()
+            
+    # Add variables for ROI sizes
+    if add_ROIsz_vars:
+        for dim_name, ROI_sz in ROI_sz_info.items():
+            var_name = 'ROI_sz_' + dim_name
+            dim_out = dim_name + '_num'
+            coords_out = {dim_out: np.arange(len(ROI_sz))}
+            Y = xr.DataArray(ROI_sz.astype(np.int), coords=coords_out,
+                             dims=[dim_out])            
+            X_out_vars[var_name] = Y
     
-    # TODO: Modify ROI dim names if not all to-be-vollapsed dimensions
-    # were present in the input Dataset, so all autput variables have
+    # TODO: Modify ROI dim names if not all to-be-collapsed dimensions
+    # were present in the input Dataset, so all output variables have
     # compatible dimensions (i.e. dims with the same name have the same
-    # coord values). Now only ROIset_dim_name=None works.
+    # coord values). Now only ROIset_dim_name=None works??
     X_out = xr.Dataset(X_out_vars)
     return X_out
         
@@ -590,22 +624,26 @@ def calc_data_file_group_ROIs(dfg_in: dfg.DataFileGroup,
                               fpath_data_column=None,
                               fpath_data_postfix=None,
                               var_renamings=None,
-                              coords_new_descs=None) -> dfg.DataFileGroup:
+                              coords_new_descs=None,
+                              preproc_fun=None,
+                              add_ROIsz_vars=False) -> dfg.DataFileGroup:
 
     proc_step_name = 'ROI calculation (%s)' % ', '.join(ROI_coords)
     
     # Dictionary of parameters
-    param_names = ['ROI_coords', 'ROI_descs', 'reduce_fun',
-                   'ROIset_dim_to_combine', 'ROIset_dim_name']
+    param_names = ['ROI_coords', 'ROI_descs', 'reduce_fun', 'preproc_fun',
+                   'ROIset_dim_to_combine', 'ROIset_dim_name', 'add_ROIsz_vars']
     local_vars = locals()
     params = {par_name: local_vars[par_name] for par_name in param_names}
     
     # Variable renamings (old name -> new name) for calc_dataset_ROIs()
     # and descriptions of the renamed variables for dfg.apply_dfg_inner_proc()
-    params['var_renamings'] = {var_name_old: var_new['name']
-                           for var_name_old, var_new in var_renamings.items()}
-    vars_new_descs = {var_new['name']: var_new['desc']
-                      for var_name_old, var_new in var_renamings.items()}
+    vars_new_descs = None
+    if var_renamings is not None:
+        params['var_renamings'] = {var_name_old: var_new['name']
+                               for var_name_old, var_new in var_renamings.items()}
+        vars_new_descs = {var_new['name']: var_new['desc']
+                          for var_name_old, var_new in var_renamings.items()}
     
     # Name of the dfg's outer table column for the paths to Dataset files
     if fpath_data_column is None:
@@ -620,6 +658,19 @@ def calc_data_file_group_ROIs(dfg_in: dfg.DataFileGroup,
     # Function that converts the parameters dict to the form suitable
     # for storing into a processing step description
     def gen_proc_step_params(par):
+        # Reducing function
+        if isinstance(reduce_fun, dict):
+            reduce_fun_str = ''
+            for var_name, fun in reduce_fun.items():
+                reduce_fun_str += f'{var_name}: {fun.__name__}, '
+        else:
+            reduce_fun_str = par['reduce_fun'].__name__
+        # Preprocessing function
+        if par['preproc_fun'] is not None:
+            preproc_fun_str = par['preproc_fun'].__name__
+        else:
+            preproc_fun_str = str(None)
+        # Params
         par_out = {
             'ROI_coords': {
                 'desc': 'Coordinates to collapse into ROIs',
@@ -628,9 +679,12 @@ def calc_data_file_group_ROIs(dfg_in: dfg.DataFileGroup,
                 'desc': 'Names and coordinate ranges of the ROIs',
                 'value': [str(d) for d in par['ROI_descs']]},
             'reduce_fun': {
-                'desc': ('Function for converting input values that belong '
+                'desc': ('Function(s) for converting input values that belong '
                          'to a ROI into a sinle output value'),
-                'value': par['reduce_fun'].__name__},
+                'value': reduce_fun_str},
+            'preproc_fun': {
+                'desc': ('Preprocessing function'),
+                'value': preproc_fun_str},
             'ROIset_dim_to_combine': {
                 'desc': 'Old ROI dimension to combine the result with',
                 'value': str(par['ROIset_dim_to_combine'])},

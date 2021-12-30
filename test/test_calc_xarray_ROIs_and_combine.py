@@ -124,28 +124,28 @@ ROI_descs['z'] = [
 reduce_fun = lambda Z, dims: reduce_fun_xarray(Z, dims, reduce_fun_1d_strjoin)
     
 QROI = {}
-QROI['x'] = roi.calc_xarray_ROIs(Q, ['x'], ROI_descs['x'], reduce_fun)
-QROI['y'] = roi.calc_xarray_ROIs(Q, ['ya'], ROI_descs['y'], reduce_fun)
-QROI['z'] = roi.calc_xarray_ROIs(Q, ['z'], ROI_descs['z'], reduce_fun)
+QROI['x'], _ = roi.calc_xarray_ROIs(Q, ['x'], ROI_descs['x'], reduce_fun)
+QROI['y'], _ = roi.calc_xarray_ROIs(Q, ['ya'], ROI_descs['y'], reduce_fun)
+QROI['z'], _ = roi.calc_xarray_ROIs(Q, ['z'], ROI_descs['z'], reduce_fun)
 
 QROI2 = {}
-QROI2['xy'] = roi.calc_xarray_ROIs(QROI['y'], ['x'], ROI_descs['x'],
+QROI2['xy'], _ = roi.calc_xarray_ROIs(QROI['y'], ['x'], ROI_descs['x'],
                                    reduce_fun, ROIset_dim_to_combine='yROI')
-QROI2['xz'] = roi.calc_xarray_ROIs(QROI['z'], ['x'], ROI_descs['x'],
+QROI2['xz'], _ = roi.calc_xarray_ROIs(QROI['z'], ['x'], ROI_descs['x'],
                                    reduce_fun, ROIset_dim_to_combine='zROI')
-QROI2['yx'] = roi.calc_xarray_ROIs(QROI['x'], ['ya'], ROI_descs['y'],
+QROI2['yx'], _ = roi.calc_xarray_ROIs(QROI['x'], ['ya'], ROI_descs['y'],
                                    reduce_fun, ROIset_dim_to_combine='xROI')
-QROI2['yz'] = roi.calc_xarray_ROIs(QROI['z'], ['ya'], ROI_descs['y'],
+QROI2['yz'], _ = roi.calc_xarray_ROIs(QROI['z'], ['ya'], ROI_descs['y'],
                                    reduce_fun, ROIset_dim_to_combine='zROI')
-QROI2['zx'] = roi.calc_xarray_ROIs(QROI['x'], ['z'], ROI_descs['z'],
+QROI2['zx'], _ = roi.calc_xarray_ROIs(QROI['x'], ['z'], ROI_descs['z'],
                                    reduce_fun, ROIset_dim_to_combine='xROI')
-QROI2['zy'] = roi.calc_xarray_ROIs(QROI['y'], ['z'], ROI_descs['z'],
+QROI2['zy'], _ = roi.calc_xarray_ROIs(QROI['y'], ['z'], ROI_descs['z'],
                                    reduce_fun, ROIset_dim_to_combine='yROI')
 
 QROI3 = {}
-QROI3['xyz'] = roi.calc_xarray_ROIs(QROI2['yz'], ['x'], ROI_descs['x'],
+QROI3['xyz'], _ = roi.calc_xarray_ROIs(QROI2['yz'], ['x'], ROI_descs['x'],
                                     reduce_fun, ROIset_dim_to_combine='yzROI')
-QROI3['zxy'] = roi.calc_xarray_ROIs(QROI2['xy'], ['z'], ROI_descs['z'],
+QROI3['zxy'], _ = roi.calc_xarray_ROIs(QROI2['xy'], ['z'], ROI_descs['z'],
                                     reduce_fun, ROIset_dim_to_combine='xyROI')
 
 print('\n====  Original  ====')

@@ -17,14 +17,11 @@ import useful as usf
 import data_file_group as dfg
 
 
-def get_xarrray_dim_by_coord(X, coord):
-    return X.coords[coord].dims[0]
-
 def xarray_coords_to_dict(X, coords):
     """Convert coords into a dict, as used in Dataset constructor."""
     d = dict()
     for coord_name, coord_vals in coords.items():
-        dim_name = get_xarrray_dim_by_coord(X, coord_name)
+        dim_name = usf.get_xarrray_dim_by_coord(X, coord_name)
         if coord_name == dim_name:
             d[coord_name] = coord_vals
         else:
@@ -72,7 +69,8 @@ def _calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
     """
     
     # Dimensions over which the ROIs are grouped
-    ROI_dims = [get_xarrray_dim_by_coord(X_in, coord) for coord in ROI_coords]
+    ROI_dims = [usf.get_xarrray_dim_by_coord(X_in, coord)
+                for coord in ROI_coords]
     
     # Name of the to-be-created ROI dimension
     if ROIset_dim_name is None:
@@ -95,7 +93,7 @@ def _calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
     # Select coordinates not covered by ROI
     coords_out = {coord_name: coord_val.values
                   for coord_name, coord_val in X_in.coords.items()
-                  if get_xarrray_dim_by_coord(X_in, coord_name) not in ROI_dims}
+                  if usf.get_xarrray_dim_by_coord(X_in, coord_name) not in ROI_dims}
     coords_out = xarray_coords_to_dict(X_in, coords_out)
 
     # Add a new first dimension that corresponds to ROI numbers
@@ -129,7 +127,7 @@ def _calc_xarray_ROIs(X_in: xr.DataArray, ROI_coords, ROI_descs,
         # Build an index
         index = dict()
         for m, coord in enumerate(ROI_coords):
-            dim = get_xarrray_dim_by_coord(X_in, coord)
+            dim = usf.get_xarrray_dim_by_coord(X_in, coord)
             coord_vals = X_in.coords[coord].values
             index[dim] = (
                 (coord_vals >= ROI_descs[n]['limits'][coord][0]) &

@@ -5,6 +5,7 @@ Created on Sun Jan 17 05:50:54 2021
 @author: Nikita
 """
 
+import copy
 import os
 
 import matplotlib.pyplot as plt
@@ -69,12 +70,13 @@ tROIset_name = 'tROIset1'
 
 # Use a subset of channels
 Nchan_used = 25
-dfg_tf.outer_table = dfg_tf.outer_table[:Nchan_used]
+dfg_tf_chan_subset = copy.deepcopy(dfg_tf)
+dfg_tf_chan_subset.outer_table = dfg_tf_chan_subset.outer_table[:Nchan_used]
 
 # Calculate spike-TF PLV
 fname_cache = f'dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_tROI_(nchan={Nchan_used})'
 f = lambda: spPLV.calc_dfg_spike_TF_PLV(
-        dfg_tf, cell_epoched_info, tROI_descs, tROIset_name)
+        dfg_tf_chan_subset, cell_epoched_info, tROI_descs, tROIset_name)
 dfg_spPLV_tROI = run_or_load(f, fname_cache, recalc=False)
 
 
@@ -134,7 +136,28 @@ f = lambda: spPLV.calc_dfg_spPLV_trial_stat(dfg_spPLV_tROI_fROI)
 dfg_spPLV_tROI_fROI_pval = run_or_load(f, fname_cache, recalc=False)
 
 
+# TF complex amplitude -> TF power (non-phase-locked)
+fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)'
+f = lambda: lfp.calc_dfg_TFpow(dfg_tf, subtract_mean=True)
+dfg_tfpow = run_or_load(f, fname_cache, recalc=False)
 
+# TFpow time ROIs
+fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_tROI'
+f = lambda: roi.calc_data_file_group_ROIs(
+        dfg_tfpow, ROI_coords=['time'], ROI_descs=tROI_descs,
+        reduce_fun=fun_mean, ROIset_dim_name='tROI',
+        fpath_data_column='fpath_TFpow_tROI', fpath_data_postfix='tROI',
+        coords_new_descs={'tROI_num': 'Time ROI'}, add_ROIsz_vars=True)
+dfg_tfpow_tROI = run_or_load(f, fname_cache, recalc=False)
+
+# TFpow time + frequency ROIs
+fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_tROI_fROI'
+f = lambda: roi.calc_data_file_group_ROIs(
+        dfg_tfpow_tROI, ROI_coords=['freq'], ROI_descs=fROI_descs,
+        reduce_fun=fun_mean, ROIset_dim_name='fROI',
+        fpath_data_column='fpath_TFpow_tROI_fROI', fpath_data_postfix='fROI',
+        coords_new_descs={'fROI_num': 'Frequency ROI'}, add_ROIsz_vars=True)
+dfg_tfpow_tROI_fROI = run_or_load(f, fname_cache, recalc=True)
 
 
 

@@ -201,3 +201,13 @@ def get_kwargs():
     return kwargs
 
 
+def get_xarrray_dim_by_coord(X, coord):
+    return X.coords[coord].dims[0]
+
+
+def xarray_select(X, coords):
+    for coord_name, coord_val in coords.items():
+        X = X[X[coord_name] == coord_val]
+        dim = get_xarrray_dim_by_coord(X, coord_name)
+        X = X.squeeze(dim=dim, drop=True)
+    return X

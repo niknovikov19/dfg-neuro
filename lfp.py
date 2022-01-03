@@ -17,6 +17,7 @@ import sys
 import re
 import pickle as pk
 
+import data_file_group as dfg
 import useful as usf
 
         
@@ -613,9 +614,48 @@ def calc_stim_TFpow_batch(chan_tf_info, trial_info, mode='induced'):
             WW[:,:,code_num,n] = w
         
     return WW  
+
+
+def _calc_dfg_TFpow_inner(X_in, subtract_mean):
+    TFpow = X_in['TF'].copy()
+    if subtract_mean:
+        TFpow -= TFpow.mean(dim='trial_num')
+    TFpow = np.abs(TFpow)**2
+    return xr.Dataset({'TFpow': TFpow})    
+
         
-        
-        
+def calc_dfg_TFpow(dfg_in, subtract_mean=True):
+
+    # Step name. params, vars, fpath column
+    proc_step_name = 'Calculate TF power'
+    params = {'subtract_mean': subtract_mean}
+    vars_new_descs = {'TFpow': 'Time-frequency LFP power'}
+    fpath_data_column = 'fpath_TFpow'
+
+    # Function that converts the parameters dict to the form suitable
+    # for storing into a processing step description
+    def gen_proc_step_params(par):
+        par_out = {
+            'subtract_mean': {
+                'desc': 'Subtract trial-averaged complex mean before the power calculation',
+                'value': str(subtract_mean)},
+        }
+        return par_out
+    
+    # Function for converting input to output inner data path
+    def gen_fpath(fpath_in, params):
+        if params['subtract_mean']:
+            return fpath_in.replace('TF', 'TFpow_noERP')
+        else:
+            return fpath_in.replace('TF', 'TFpow')
+    
+    # Call the inner procedure for each inner dataset of the DataFileGroup
+    dfg_out = dfg.apply_dfg_inner_proc(
+            dfg_in, _calc_dfg_TFpow_inner, params, proc_step_name,
+            gen_proc_step_params, fpath_data_column, gen_fpath, vars_new_descs)
+    
+    return dfg_out
+    
         
         
         

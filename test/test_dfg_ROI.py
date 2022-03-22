@@ -17,7 +17,7 @@ sys.path.append(dirpath_pkg)
 
 #import useful as usf
 import roi_utils as roi
-import data_file_group as dfg
+import data_file_group_2 as dfg
 import test_utils as test
 
 
@@ -59,12 +59,13 @@ ROI_descs['zy'] = [
         ]
 
 # Load root DatFileGroup
-fpath_dfg_root = r'H:\WORK\Camilo\TEST\dfg_test\dfg_root'
+fpath_dfg_root = r'D:\WORK\Camilo\TEST\dfg_test\dfg_root_5'
 dfg_root = dfg.DataFileGroup()
 dfg_root.load(fpath_dfg_root)
 
 dfg_roi = {}
-dirpath_dfg_txt = r'H:\WORK\Camilo\TEST\dfg_test'
+dirpath_dfg_txt = r'D:\WORK\Camilo\TEST\dfg_ROI_test\ROI_test_5'
+
 
 ROIset_dim_to_combine = None
 ROIset_dim_name = None

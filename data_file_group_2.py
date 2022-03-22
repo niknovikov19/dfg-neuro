@@ -20,10 +20,14 @@ sys.path.append(dirpath_pkg)
 import useful as usf
 
 
+
 class DataProcTree:
     "Description of a sequence of data processing steps."
     
     def __init__(self):
+        self.clear()
+        
+    def clear(self):
         self.proc_steps = {}
         self.branch_id = '(1)'
         self.proc_steps[self.branch_id] = {}
@@ -75,56 +79,70 @@ class DataProcTree:
         step_id_prev = self._step_id_by_num(step_num - 1)
         step_prev = self.proc_steps[self.branch_id][step_id_prev]
         return [step_prev]
+    
 
-
-class DataFileGroup:
-    "Representation of data stored in multiple files."
+# =============================================================================
+# 
+# =============================================================================
+    
+class DataContainerBase:
+    "Base class for the multi-file and table storages."
     
     def __init__(self, fpath_in=None):
         self.outer_table = pd.DataFrame()
         self.data_proc_tree = DataProcTree()
         if fpath_in is not None:
             self.load(fpath_in)
+
+    def _create_outer_table(self):
+        data_desc = self.get_data_desc()
+        col_names = list(data_desc['outer_coords'].keys())
+        proc_steps = self.data_proc_tree.proc_steps
+        for step in proc_steps['(1)'].values():
+            step_data_desc = step['data_desc_out']
+            if 'fpath_data_column' in step_data_desc:
+                col_names += [step_data_desc['fpath_data_column']]
+            if 'outer_data_vals' in step_data_desc:
+                col_names += list(step_data_desc['outer_data_vals'].keys())
+        self.outer_table = pd.DataFrame(columns=col_names)
         
-    def create(self, root_proc_step):        
-        # Create empty outer table with columns for outer coords
-        # and a column for paths to inner data files
-        data_desc = root_proc_step['data_desc_out']
-        outer_coords = list(data_desc['outer_coords'].keys())
-        #TODO: check that outer_dims are a subset of outer_coords
-        col_names = outer_coords + [data_desc['fpath_data_column']]
-        self.outer_table = pd.DataFrame(columns=col_names)        
-        # Create the first processing step description
-        self.data_proc_tree.add_process_step(
-                root_proc_step['name'], root_proc_step['function'],
-                root_proc_step['params'], root_proc_step['data_desc_out'])
-        
-    def create2(self, proc_steps):
-        # Create the processing tree
-        # TODO: all branches
+    def _set_proc_tree(self, proc_steps):
+        self.data_proc_tree.clear()
         for step in proc_steps['(1)'].values():
             self.data_proc_tree.add_process_step(
                     step['name'], step['function'], step['params'],
                     step['data_desc_out'])
-        # Create outer table
-        data_desc = self.get_data_desc()
-        col_names = list(data_desc['outer_coords'].keys())
-        for step in proc_steps['(1)'].values():
-            fpath_data_column = step['data_desc_out']['fpath_data_column']
-            col_names.append(fpath_data_column)
-        self.outer_table = pd.DataFrame(columns=col_names) 
         
-    def add_entry(self, outer_coords, X, fpath_data):
-        # TODO: check that dimension vals' combinations do not repeat
-        # Create new entry in the outer table
-        new_entry_data = outer_coords.copy()
-        new_entry_data.update({self.get_fpath_data_column_name(): ''})
-        self.outer_table = self.outer_table.append(new_entry_data,
-                                                   ignore_index=True)
-        table_entry = self.get_last_table_entry()
-        # Save inner data and store the corresponding path into outer_table
-        self.set_inner_data_attrs(table_entry, X)
-        self.save_inner_data(table_entry, X, fpath_data)        
+    def create2(self, proc_steps):
+        """
+        proc_steps[n]
+            name
+            function
+            params
+            data_desc_out
+                variables
+                    {name: description}
+                outer_dims
+                    [name]
+                outer_coords
+                    {name: description}
+                ------
+                <DataFileGroup only>
+                fpath_data_column
+                inner_dims
+                    [name]
+                inner_coords
+                    {name: description}
+       """
+        # Create the processing tree
+        # TODO: all branches
+        self._set_proc_tree(proc_steps)
+        # Create outer table
+        self._create_outer_table()
+        
+    def create(self, root_proc_step):
+        proc_steps = {'(1)': {'0': root_proc_step}}        
+        self.create2(proc_steps)
         
     def get_data_desc(self):
         return self.data_proc_tree.get_last_step()['data_desc_out']
@@ -138,6 +156,96 @@ class DataFileGroup:
     def get_last_table_entry(self):
         return self.get_table_entries()[-1]
     
+    def get_table_entry_rec(self, table_entry):
+        return dict(self.outer_table.loc[table_entry])
+    
+    def make_data_attrs(self):
+        # Data description - from the last processing step
+        data_desc = self.get_data_desc()
+        attrs = {
+            'data_desc': data_desc,
+            'proc_steps': self.data_proc_tree.proc_steps,
+            }
+        return attrs
+    
+    def get_var_names(self):
+        return list(self.get_data_desc()['variables'].keys())
+    
+    def _init_outer_indices(self):
+        num_entries = len(self.outer_table)
+        self.outer_table.set_index(np.arange(num_entries), inplace=True)
+        
+    def save(self, fpath_out):
+        with open(fpath_out, 'wb') as fid:
+            pickle.dump(self, fid)
+            
+    def load(self, fpath_in):
+        with open(fpath_in, 'rb') as fid:
+            print(fpath_in)
+            obj = pickle.load(fid)
+        self.data_proc_tree = obj.data_proc_tree
+        self.outer_table = obj.outer_table
+        # Fix un-initialized indices
+        if np.all(self.outer_table.index == 0):
+            self._init_outer_indices()
+    
+    def change_root(self, old_root, new_root):
+        fpath_col_name = self.get_fpath_data_column_name()
+        for entry in self.get_table_entries():        
+            fpath_old = self.outer_table.at[entry, fpath_col_name]
+            fpath_new = fpath_old.replace(old_root, new_root)
+            self.outer_table.at[entry, fpath_col_name] = fpath_new
+
+# =============================================================================
+# 
+# =============================================================================
+
+
+class DataTable(DataContainerBase):
+    "Representation of data stored in a table."
+    
+    def __init__(self, fpath_in=None):
+        super().__init__(fpath_in)
+
+    def add_entry(self, outer_coords, X):
+        """Create new entry in the outer table.
+        
+        outer_coords = {name1: value1, ...}
+        X = {name1: value1, ...}
+        """
+        # TODO: check that dimension vals' combinations do not repeat
+        new_entry = outer_coords.copy()
+        new_entry.update(X)
+        self.outer_table = self.outer_table.append(
+                new_entry, ignore_index=True)
+    
+    def get_outer_data(self, table_entry):
+        var_names = self.get_var_names()
+        return dict(self.outer_table.loc[table_entry][var_names])
+
+   
+# =============================================================================
+#             
+# =============================================================================
+
+class DataFileGroup(DataContainerBase):
+    "Representation of data stored in multiple files."
+    
+    def __init__(self, fpath_in=None):
+        super().__init__(fpath_in)
+        
+    def add_entry(self, outer_coords, X, fpath_data, save_inner=True):
+        # TODO: check that dimension vals' combinations do not repeat
+        # Create new entry in the outer table
+        new_entry_data = outer_coords.copy()
+        new_entry_data.update({self.get_fpath_data_column_name(): ''})
+        self.outer_table = self.outer_table.append(new_entry_data,
+                                                   ignore_index=True)
+        table_entry = self.get_last_table_entry()
+        # Save inner data and store the corresponding path into outer_table
+        self.set_inner_data_attrs(table_entry, X)
+        self.save_inner_data(table_entry, X, fpath_data, save_inner)
+    
     def get_fpath_data_column_name(self):
         return self.get_data_desc()['fpath_data_column']
     
@@ -147,22 +255,16 @@ class DataFileGroup:
     
     def load_inner_data(self, table_entry):
         fpath_data = self.get_inner_data_path(table_entry)
+        print('--------------------------')
+        print(fpath_data)
         X = xr.open_dataset(fpath_data, engine='h5netcdf')
         return X
     
-    def save_inner_data(self, table_entry, X, fpath_out):
+    def save_inner_data(self, table_entry, X, fpath_out, save_inner=True):
         column_name = self.get_fpath_data_column_name()
         self.outer_table.at[table_entry, column_name] = fpath_out
-        X.to_netcdf(fpath_out, engine='h5netcdf', invalid_netcdf=True)
-        
-    def make_data_attrs(self):
-        # Data description - from the last processing step
-        data_desc = self.get_data_desc()
-        attrs = {
-            'data_desc': data_desc,
-            'proc_steps': self.data_proc_tree.proc_steps,
-            }
-        return attrs
+        if save_inner:
+            X.to_netcdf(fpath_out, engine='h5netcdf', invalid_netcdf=True)
     
     def make_inner_data_attrs(self, table_entry):
         # Data description - from the last processing step
@@ -192,24 +294,11 @@ class DataFileGroup:
         X.attrs = usf.flatten_dict(attrs)
         for var in X.data_vars.values():
             var.attrs.clear()
-    
-    def save(self, fpath_out):
-        with open(fpath_out, 'wb') as fid:
-            pickle.dump(self, fid)
-            
-    def init_outer_indices(self):
-        num_entries = len(self.outer_table)
-        self.outer_table.set_index(np.arange(num_entries), inplace=True)        
-            
-    def load(self, fpath_in):
-        with open(fpath_in, 'rb') as fid:
-            obj = pickle.load(fid)
-        self.data_proc_tree = obj.data_proc_tree
-        self.outer_table = obj.outer_table
-        # Fix un-initialized indices
-        if np.all(self.outer_table.index == 0):
-            self.init_outer_indices()
 
+
+# =============================================================================
+#             
+# =============================================================================
 
 def make_data_desc(data_desc_old, var_names, fpath_data_column,
                    inner_dim_names, inner_coord_names,
@@ -221,7 +310,7 @@ def make_data_desc(data_desc_old, var_names, fpath_data_column,
     data_desc_new['fpath_data_column'] = fpath_data_column
     
     # Outer dims and coords - from the old description
-    data_desc_new['outer_dims'] = data_desc_old['outer_dims']
+    data_desc_new['outer_dims'] = usf.list_wrap(data_desc_old['outer_dims'])
     data_desc_new['outer_coords'] = data_desc_old['outer_coords']
     
     # Names of inner vars, dims, and coords
@@ -255,9 +344,9 @@ def make_data_desc(data_desc_old, var_names, fpath_data_column,
 
 
 def apply_dfg_inner_proc(dfg_in: DataFileGroup,
-                         inner_proc: 'function', params: dict, 
-                         proc_step_name: str, gen_proc_step_params: 'function',
-                         fpath_data_column: str, gen_fpath: 'function',
+                         inner_proc, params: dict, 
+                         proc_step_name: str, gen_proc_step_params,
+                         fpath_data_column: str, gen_fpath,
                          vars_new_descs=None, coords_new_descs=None):
     
     dfg_out = copy.deepcopy(dfg_in)
@@ -317,4 +406,90 @@ def apply_dfg_inner_proc(dfg_in: DataFileGroup,
     pbar.close()
     
     return dfg_out
+
+
+def dfg_to_table(dfg_in: DataFileGroup):
+    
+    data_desc_in = dfg_in.get_data_desc()
+    
+    # New data description: inner dims / coords become outer dims / coords
+    data_desc_out = copy.deepcopy(data_desc_in)
+    data_desc_out['outer_dims'] = (
+        usf.list_wrap(data_desc_out['outer_dims']) +
+        usf.list_wrap(data_desc_out['inner_dims']))
+    data_desc_out['outer_coords'].update(data_desc_out['inner_coords'])
+    data_desc_out.pop('inner_dims')
+    data_desc_out.pop('inner_coords')
+    data_desc_out.pop('fpath_data_column')
+    
+    fpath_col_name = dfg_in.get_fpath_data_column_name()
+    
+    # Columns of the new table
+    cols_out = list(dfg_in.outer_table.columns)
+    cols_out.pop(cols_out.index(fpath_col_name))
+    cols_out += list(data_desc_in['inner_coords'].keys())
+    cols_out += list(data_desc_in['variables'].keys())
+    
+    entry_list_out = []
+    for entry_in in dfg_in.get_table_entries():
+        # Row of the old table
+        entry_rec_in = dfg_in.get_table_entry_rec(entry_in)
+        # Row of the new table (start construction)
+        entry_rec_out_0 = entry_rec_in.copy()
+        entry_rec_out_0.pop(fpath_col_name)
+        # Load inner data
+        X = dfg_in.load_inner_data(entry_in)
+        coord_man = usf.XrCoordManager(X)
+        # Walk through all positions in the inner data and put values from
+        # each position into a separate row of the new table
+        pos_list = list(coord_man.get_all_positions())
+        for pos in tqdm(pos_list):
+            # Current inner dims / coords
+            pos_coords = coord_man.coords_by_pos(pos)
+            pos_dims = coord_man.dims_by_pos(pos)
+            # Add current inner coords to the new table row
+            entry_rec_out = entry_rec_out_0.copy()
+            entry_rec_out.update(pos_coords)
+            # Get values of all inner data variables at the current position
+            # and add them to the new table row
+            for var_name in list(X.data_vars):
+                x = X.loc[pos_dims][var_name].values.item()
+                entry_rec_out[var_name] = x
+            # Add an entry to the list of the the new table rows
+            entry_list_out.append(entry_rec_out)
+    
+    # Description of the processing step
+    step_name = 'DataFileGroup to DataTable'
+    step_fun = 'dfg_to_table()'
+    step_params = {}
+    
+    # Create output object
+    dtbl_out = DataTable()
+    dtbl_out.outer_table = pd.DataFrame(entry_list_out, columns=cols_out)
+    dtbl_out.data_proc_tree = copy.deepcopy(dfg_in.data_proc_tree)
+    dtbl_out.data_proc_tree.add_process_step(
+            step_name, step_fun, step_params, data_desc_out)
+    dtbl_out._init_outer_indices()
+    return dtbl_out
+            
+            
+
+#cm = usf.XrCoordManager(X)
+
+'''
+variables
+    {name: description}
+outer_dims
+    [name]
+outer_coords
+    {name: description}
+------
+<DataFileGroup only>
+fpath_data_column
+inner_dims
+    [name]
+inner_coords
+    {name: description}
+'''
+
 

@@ -17,11 +17,11 @@ sys.path.append(dirpath_pkg)
 
 import useful as usf
 import roi_utils as roi
-import data_file_group as dfg
+import data_file_group_2 as dfg
 import test_utils as test
 
 
-dirpath_root = r'H:\WORK\Camilo\TEST\tfROI_test'
+dirpath_root = r'D:\WORK\Camilo\TEST\tfROI_test'
 fname_in = 'TF_(ev=stim1_t)_(t=-1.00-3.00)_(wlen=0.500_wover=0.450_fmax=100.0).nc'
 
 # TF ROIs
@@ -88,10 +88,10 @@ for dirname in os.listdir(dirpath_root):
         
     # Add the dataset to the DataFileGroup
     outer_coords = attrs['outer_coord_vals']
-    dfg_tf.add_entry(outer_coords, X, fpath_in)
+    dfg_tf.add_entry(outer_coords, X, fpath_in, save_inner=False)
     
 # Save the DataFileGroup
-fpath_out = os.path.join(dirpath_root, 'dfg_TF')
+fpath_out = os.path.join(dirpath_root, 'dfg_TF_5')
 dfg_tf.save(fpath_out)
 
 def reduce_fun(X, dims):
@@ -108,10 +108,19 @@ dfg_tfroi = roi.calc_data_file_group_ROIs(
         var_renamings=var_renamings, coords_new_descs=coords_new_descs)
 
 # Load datasets, one by one, and print them into a file
-fpath_txt = r'H:\WORK\Camilo\TEST\tfROI_test\tfROI_test.txt'
+fpath_txt = r'D:\WORK\Camilo\TEST\tfROI_test\tfROI_test_5.txt'
 test.print_dfg(dfg_tfroi, fpath_txt)
     
     
-
+# =============================================================================
+# fpath_1 = r'D:\WORK\Camilo\TEST\tfROI_test\dfg_TF'
+# fpath_2 = r'D:\WORK\Camilo\TEST\tfROI_test\dfg_TF_2'
+# dfg_1 = dfg.DataFileGroup(fpath_1)
+# dfg_2 = dfg.DataFileGroup(fpath_2)
+# tbl1 = dfg_1.outer_table
+# tbl2 = dfg_2.outer_table
+# dpc1 = dfg_1.data_proc_tree.proc_steps
+# dpc2 = dfg_2.data_proc_tree.proc_steps
+# =============================================================================
 
 

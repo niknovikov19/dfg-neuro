@@ -37,7 +37,7 @@ def create_sess_trial_table(dirpath_session):
         'reward_on_t',
         'trial_end_t']
     
-    # Table of trails for output
+    # Table of trials for output
     trial_tbl = pd.DataFrame(columns=col_names)
     
     # Table entry

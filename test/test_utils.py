@@ -6,15 +6,15 @@ import os
 import sys
 
 import numpy as np
-from pprint import pprint
+#from pprint import pprint
 import xarray as xr
 
 dirpath_file = os.path.dirname(os.path.abspath(__file__))
 dirpath_pkg = os.path.dirname(dirpath_file)
 sys.path.append(dirpath_pkg)
 
-import data_file_group
-importlib.reload(data_file_group)
+import data_file_group_2
+importlib.reload(data_file_group_2)
 
 
 def reduce_fun_1d_strjoin(x):

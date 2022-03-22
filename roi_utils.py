@@ -14,7 +14,7 @@ from tqdm import tqdm
 import xarray as xr
 
 import useful as usf
-import data_file_group as dfg
+import data_file_group_2 as dfg
 
 
 def xarray_coords_to_dict(X, coords):

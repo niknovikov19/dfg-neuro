@@ -26,14 +26,14 @@ import lfp
 import spike_corr as spcor
 import vis
 
-import data_file_group as dfg
+import data_file_group_2 as dfg
 import roi_utils as roi
 import spike_TF_PLV as spPLV
 import useful as usf
 
 
 # Root paths for the data and the processing results
-dirpath_root = r'H:\WORK\Camilo'
+dirpath_root = r'D:\WORK\Camilo'
 dirpath_data = os.path.join(dirpath_root, 'data')
 dirpath_proc = os.path.join(dirpath_root, 'Processing_Pancake_2sess_allchan')
 
@@ -41,13 +41,14 @@ Nchan_used = 25
 fname_in = f'dfg_spPLV_(ev=stim1_t)_(TF_0.5_0.4_100)_tROI_fROI_pval_(nchan={Nchan_used})'
 fpath_in = os.path.join(dirpath_proc, fname_in)    
 dfg_spPLV_tROI_fROI_pval = dfg.DataFileGroup(fpath_in)
+dfg_spPLV_tROI_fROI_pval.change_root('H:', 'D:')
 
 pvals_all = np.array([], dtype=np.float)
 PLV_all = np.array([], dtype=np.float)
 R_all = np.array([], dtype=np.float)
 chan_all = np.array([], dtype=np.float)
 
-for n in range(25):
+for n in range(Nchan_used):
 
     X = dfg_spPLV_tROI_fROI_pval.load_inner_data(n)
     

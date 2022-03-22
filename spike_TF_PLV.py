@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import pickle as pk
 
-import data_file_group as dfg
+import data_file_group_2 as dfg
 #import firing_rate as fr
 import roi_utils as roi
 #import spiketrain_manager as spk
@@ -57,14 +57,14 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
 
     # Initialize PLV DataArray
     coords_PLV = {
-        'freq':         X_in.freq,
+        'freq':         X_in.freq.data,
         'tROI_num':     ROI_nums,
         'tROI_name':    ('tROI_num', ROI_names),
         'tROI_name2':   ('tROI_num', ROI_names2),
         'trial_num':    X_in.trial_num,
-        'trial_id':     ('trial_num', X_in.trial_id),
+        'trial_id':     ('trial_num', X_in.trial_id.data),
         'cell_id':      cells.cell_id,
-        'cell_name':    ('cell_id', cells.cell_name)
+        'cell_name':    ('cell_id', cells.cell_name.values)
         }
     Xnan = np.nan * np.ones((Nfreq, NROI, Ntrials, Ncell), dtype='complex128')    
     data_PLV = xr.DataArray(Xnan, coords=coords_PLV,
@@ -85,7 +85,8 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
         # Load spiketrain
         cell = cells.iloc[cell_num]
         with open(cell.fpath_epoched, 'rb') as fid:
-            spikes = pk.load(fid).values
+            spikes = pk.load(fid)
+            spikes = spikes.values
         
         for trial_num, trial_spikes in enumerate(spikes):            
             for tROI_num, tROI in enumerate(tROI_descs):

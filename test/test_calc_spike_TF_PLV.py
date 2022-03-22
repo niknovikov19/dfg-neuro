@@ -7,9 +7,12 @@ Created on Sun Jan 17 05:50:54 2021
 
 import os
 import sys
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 #import matplotlib.pyplot as plt
-#import numpy as np
+import numpy as np
 #import pandas as pd
 #import xarray as xr
 import pickle as pk
@@ -18,11 +21,11 @@ dirpath_file = os.path.dirname(os.path.abspath(__file__))
 dirpath_pkg = os.path.dirname(dirpath_file)
 sys.path.append(dirpath_pkg)
 
-import data_file_group as dfg
+import data_file_group_2 as dfg
 import spike_TF_PLV as spPLV
 
 # Root paths for the data and the processing results
-dirpath_root = r'H:\WORK\Camilo'
+dirpath_root = r'D:\WORK\Camilo'
 dirpath_data = os.path.join(dirpath_root, 'data')
 dirpath_proc = os.path.join(dirpath_root, 'Processing_Pancake_2sess_allchan')
 
@@ -55,7 +58,30 @@ dfg_spPLV = spPLV.calc_dfg_spike_TF_PLV(dfg_tf, cell_epoched_info, tROI_descs,
                                         tROIset_name, Ncell_used)
 
 # Save the result
-fpath_out = r'H:\WORK\Camilo\TEST\spPLV_test\spPLV_test'
+fpath_out = r'D:\WORK\Camilo\TEST\spPLV_test\spPLV_test_2'
 dfg_spPLV.save(fpath_out)
+
+# Compare with the old result
+fpath_old = r'D:\WORK\Camilo\TEST\spPLV_test\spPLV_test'
+dfg_spPLV_old = dfg.DataFileGroup(fpath_old)
+
+for entry in range(len(dfg_spPLV_old.outer_table)):
+
+    fpath_data = dfg_spPLV_old.outer_table.at[entry, 'fpath_spPLV_tROI']
+    fpath_data = fpath_data.replace('H:', 'D:')
+    dfg_spPLV_old.outer_table.at[entry, 'fpath_spPLV_tROI'] = fpath_data
+    
+    X_new = dfg_spPLV.load_inner_data(entry)
+    X_old = dfg_spPLV_old.load_inner_data(entry)
+    
+    for var_name in X_new.data_vars:
+    
+        x_new = X_new[var_name].data 
+        x_old = X_old[var_name].data 
+        
+        b = (x_new != x_old)
+        print(np.all(np.isnan(x_new[b])))
+        print(np.all(np.isnan(x_old[b])))
+
 
 

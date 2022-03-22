@@ -6,6 +6,7 @@ Created on Tue Mar 30 18:36:11 2021
 """
 
 import inspect
+import itertools
 import os
 import re
 
@@ -211,3 +212,61 @@ def xarray_select(X, coords):
         dim = get_xarrray_dim_by_coord(X, coord_name)
         X = X.squeeze(dim=dim, drop=True)
     return X
+
+
+class XrCoordManager:
+    
+    def __init__(self, X=None):
+        self.dims = None
+        self.coords = None
+        self.coord_dim_map = None
+        self.dim_num_map = None
+        if X:
+            self.set_xr(X)
+            
+    def set_xr(self, X: xr.Dataset):
+        self.dims = list(X.dims)
+        self.coords = {}
+        self.coord_dim_map = {}
+        for coord_name in list(X.coords):
+            self.coords[coord_name] = X.coords[coord_name].values
+            self.coord_dim_map[coord_name] = (
+                     get_xarrray_dim_by_coord(X, coord_name))
+        self.dim_num_map = {}
+        for n, dim in enumerate(self.dims):
+            self.dim_num_map[dim] = n
+            
+    def get_dim_names(self):
+        return self.dims
+    
+    def get_coord_names(self):
+        return list(self.coords.keys())
+    
+    def get_dim_ranges(self):
+        return [range(len(self.coords[dim])) for dim in self.dims]
+            
+    def get_all_positions(self):
+        return itertools.product(*self.get_dim_ranges())
+    
+    def dims_by_pos(self, pos):
+        x = {}
+        for n, pos_n in enumerate(pos):
+            dim = self.dims[n]
+            coord_val = self.coords[dim][pos_n]
+            x[dim] = coord_val
+        return x
+    
+    def coords_by_pos(self, pos):
+        x = {}
+        for coord in self.coords:
+            dim = self.coord_dim_map[coord]
+            n = self.dim_num_map[dim]
+            x[coord] = self.coords[coord][pos[n]]
+        return x
+
+
+def list_wrap(x):
+    if isinstance(x, list):
+        return x
+    else:
+        return [x] 

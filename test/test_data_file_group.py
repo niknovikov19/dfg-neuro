@@ -13,7 +13,7 @@ dirpath_file = os.path.dirname(os.path.abspath(__file__))
 dirpath_pkg = os.path.dirname(dirpath_file)
 sys.path.append(dirpath_pkg)
 
-import data_file_group as dfg
+import data_file_group_2 as dfg
 import test_utils as test
 #importlib.reload(data_file_group)
 
@@ -79,7 +79,7 @@ sz_values = [
         [4, 2, 3]
 ]
 
-dirpath_data_base = 'H:\WORK\Camilo\TEST\dfg_test'
+dirpath_data_base = r'D:\WORK\Camilo\TEST\dfg_test'
 fpath_data_list = [os.path.join(dirpath_data_base, f'entry_{n}', 'data_root')
                    for n in range(len(sz_values))]
 
@@ -111,10 +111,10 @@ for n, (sz, fpath_data) in enumerate(zip(sz_values, fpath_data_list)):
     dfg_test.add_entry(outer_coords, X, fpath_data)
 
 # Load datasets, one by one, and print them into a file
-fpath_txt = r'H:\WORK\Camilo\TEST\dfg_test\dfg_test_1.txt'
+fpath_txt = r'D:\WORK\Camilo\TEST\dfg_test\dfg_test_5.txt'
 test.print_dfg(dfg_test, fpath_txt)
                 
 # Save the DataFileGroup
-fpath_out = r'H:\WORK\Camilo\TEST\dfg_test\dfg_root'
+fpath_out = r'D:\WORK\Camilo\TEST\dfg_test\dfg_root_5'
 dfg_test.save(fpath_out)
 

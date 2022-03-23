@@ -4,6 +4,7 @@ import copy
 #import importlib
 #import itertools
 import os
+import re
 import sys
 
 import numpy as np
@@ -79,7 +80,37 @@ class DataProcTree:
         step_id_prev = self._step_id_by_num(step_num - 1)
         step_prev = self.proc_steps[self.branch_id][step_id_prev]
         return [step_prev]
-    
+
+
+def find_max_root_num(branch_id):
+    templ = '([\d]+)[\D]+'
+    res = re.findall(templ, branch_id)
+    root_nums = [int(s) for s in res]
+    return np.max(np.array(root_nums))
+
+def increment_root_nums(branch_id, inc):
+    def rep_fun(match):
+        s = match.group(0)
+        x = int(s)
+        return str(x + inc)
+    templ = '[\d]+'
+    return re.sub(templ, rep_fun, branch_id)
+
+
+def merge_proc_trees(tree1: DataProcTree, tree2: DataProcTree):
+    branch_id_1 = tree1.branch_id  
+    branch_id_2 = tree2.branch_id
+    inc = find_max_root_num(branch_id_1)
+    branch_id_2 = increment_root_nums(branch_id_2, inc)
+    branch_id_12 = f'({branch_id_1}+{branch_id_2})'    
+    tree12 = DataProcTree()
+    tree12.proc_steps = copy.deepcopy(tree1.proc_steps)
+    for branch_id, proc_step in tree2.proc_steps.items():
+        branch_id_new = increment_root_nums(branch_id, inc)
+        tree12.proc_steps[branch_id_new] = copy.deepcopy(proc_step)
+    tree12.branch_id = branch_id_12
+    tree12.proc_steps[branch_id_12] = {}
+    return tree12
 
 # =============================================================================
 # 

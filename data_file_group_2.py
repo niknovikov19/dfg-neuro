@@ -212,7 +212,7 @@ class DataContainerBase:
             
     def load(self, fpath_in):
         with open(fpath_in, 'rb') as fid:
-            print(fpath_in)
+            #print(fpath_in)
             obj = pickle.load(fid)
         self.data_proc_tree = obj.data_proc_tree
         self.outer_table = obj.outer_table
@@ -286,8 +286,8 @@ class DataFileGroup(DataContainerBase):
     
     def load_inner_data(self, table_entry):
         fpath_data = self.get_inner_data_path(table_entry)
-        print('--------------------------')
-        print(fpath_data)
+        #print('--------------------------')
+        #print(fpath_data)
         X = xr.open_dataset(fpath_data, engine='h5netcdf')
         return X
     

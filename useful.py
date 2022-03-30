@@ -202,16 +202,22 @@ def get_kwargs():
     return kwargs
 
 
-def get_xarrray_dim_by_coord(X, coord):
-    return X.coords[coord].dims[0]
+def get_xarrray_dim_by_coord(X, coord_name, coord_val=None):
+    dim_name = X.coords[coord_name].dims[0]
+    if coord_val is None:
+        return dim_name
+    else:
+        mask = (X[coord_name] == coord_val)
+        dim_val = X[dim_name][mask].data[0]
+        return (dim_name, dim_val)
 
 
 def xarray_select(X, coords):
+    dim_vals = {}
     for coord_name, coord_val in coords.items():
-        X = X[X[coord_name] == coord_val]
-        dim = get_xarrray_dim_by_coord(X, coord_name)
-        X = X.squeeze(dim=dim, drop=True)
-    return X
+        dim_name, dim_val = get_xarrray_dim_by_coord(X, coord_name, coord_val)
+        dim_vals[dim_name] = dim_val
+    return X[dim_vals].values
 
 
 class XrCoordManager:

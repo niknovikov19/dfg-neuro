@@ -19,7 +19,7 @@ import trial_manager as trl
 import spiketrain_manager as spk
 import firing_rate as fr
 import lfp
-import spike_corr as spcor
+#import spike_corr as spcor
 import vis
 
 import data_file_group_2 as dfg
@@ -27,8 +27,7 @@ from find_trial_pairs_by_samedif_TF_tfROI import dfg_find_trial_pairs_by_samedif
 import roi_utils as roi
 from select_cell_pairs_by_spPLV import select_cell_pairs_by_spPLV
 import spike_TF_PLV as spPLV
-import useful as usf
-
+import rvec_cov as rcov
 
 # Root paths for the data and the processing results
 dirpath_root = r'D:\WORK\Camilo'
@@ -184,6 +183,25 @@ f = lambda: roi.calc_data_file_group_ROIs(
         fpath_data_column='fpath_TFpow_tROI_fROI', fpath_data_postfix='fROI',
         coords_new_descs={'fROI_num': 'Frequency ROI'}, add_ROIsz_vars=True)
 dfg_tfpow_tROI_fROI = run_or_load(f, fname_cache, recalc=False)
+
+
+# Firing rates
+fname_cache = 'dfg_rvec_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)'
+def f(): raise NotImplementedError('Rate calculation (dfg) not implemented')
+dfg_rvec = run_or_load(f, fname_cache, recalc=False)
+
+# Firing rate covariance
+nbins_jit = 5
+niter_jit = 50
+lag_range = (-15, 15)
+time_range = (0.85, 1.2)
+Nlags = lag_range[1] - lag_range[0] + 1
+fname_cache = ('dfg_rcov_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)_' +
+               f'(bins={nbins_jit}_iter={niter_jit}_nlags={Nlags}_' +
+               f't={time_range[0]}-{time_range[1]})')
+f = lambda: rcov.calc_dfg_rvec_cov_nojit(
+        dfg_rvec, nbins_jit, niter_jit, time_range, lag_range)
+dfg_rcov = run_or_load(f, fname_cache, recalc=True)
 
 
 # Same-dif trial pairs

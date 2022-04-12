@@ -17,40 +17,16 @@ branch_id = '1'
 
 proc_steps = {
     '0': {
-        'name': 'LFP data',
-        'function': '',
-        'data_desc_out':  {
-            'variables': {'LFP': 'LFP amplitude'},
-            'outer_dims': ['chan_name'],
-            'outer_coords': {
-                'chan_name': 'Subject + session + channel',
-            },
-            'inner_dims': ['sample_num'],
-            'inner_coords': {
-                'sample_num': 'Sample number',
-                'time': 'Time, s'
-            },
-            'fpath_data_column': 'fpath_lfp',
-        },
-        'params': {
-            'fs': {
-                'desc': 'Sampling rate',
-                'value': 1000},
-        }
-    },
-    '1': {
         'name': 'Epoching',
-        'function': 'epoch_lfp_data_batch()',
+        'function': 'epoch_spike_data_batch()',
         'data_desc_out':  {
-            'variables': {'LFP': 'LFP amplitude'},
-            'outer_dims': ['chan_name'],
+            'variables': {'Spikes': 'Spike timings'},
+            'outer_dims': ['cell_name'],
             'outer_coords': {
-                'chan_name': 'Subject + session + channel',
+                'cell_name': 'Subject + session + channel + cell',
             },
-            'inner_dims': ['sample_num', 'trial_num'],
+            'inner_dims': ['trial_num'],
             'inner_coords': {
-                'sample_num': 'Sample number',
-                'time': 'Time, s',
                 'trial_num': 'Trial number (sequential)',
                 'trial_id': 'Trial number in the experiment'
             },
@@ -67,52 +43,87 @@ proc_steps = {
                 'name_old': 'epoching_time_win'},
         }
     },
-    '2': {
-        'name': 'Time-frequency transform',
-        'function': 'calc_lfp_tf()',
+    '1': {
+        'name': 'Spike train to firing rate signal',
+        'function': 'calc_frate_vec_batch()',
         'data_desc_out':  {
-            'variables': {'TF': 'Time-frequency complex amplitude'},
-            'outer_dims': ['chan_name'],
+            'variables': {'r': 'Firing rate'},
+            'outer_dims': ['cell_name'],
             'outer_coords': {
-                'chan_name': 'Subject + session + channel',
+                'cell_name': 'Subject + session + channel + cell',
             },
-            'inner_dims': ['freq', 'time', 'trial_num'],
+            'inner_dims': ['sample_num', 'trial_num'],
             'inner_coords': {
-                'freq': 'Frequency, Hz',
+                'sample_num': 'Sample number',
                 'time': 'Time, s',
                 'trial_num': 'Trial number (sequential)',
                 'trial_id': 'Trial number in the experiment'
             },
-            'fpath_data_column': 'fpath_tf'
+            'fpath_data_column': 'fpath_rvec',
         },
         'params': {
-            'fmax': {
-                'desc': 'Upper frequency in TF transform, Hz',
+            'dt': {
+                'desc': 'Firing rate time bin',
                 'value': None,
-                'name_old': 'tf_fmax'},
-            'time_window_len': {
-                'desc': 'Length of the temporal window in TF transform, s',
+                'name_old': 'rvec_dt'},
+            'time_range': {
+                'desc': 'Time interval of the firing rate signal',
                 'value': None,
-                'name_old': 'tf_win_len'},
-            'time_window_overlap': {
-                'desc': 'Overlap of adjacent time windows, s',
+                'name_old': 'rvec_time_range'}
+        }
+    },
+    '2': {
+        'name': 'Cross-covariance of firing rate signals',
+        'function': 'calc_dfg_rvec_cov_nojit()',
+        'data_desc_out':  {
+            'variables': {'rcov': 'Rate covariance'},
+            'outer_dims': ['sess_id'],
+            'outer_coords': {
+                'sess_id': 'Session id'
+            },
+            'inner_dims': ['cell1_num', 'cell2_num', 'sample_num', 'trial_num'],
+            'inner_coords': {
+                'cell1_name': 'Cell 1 name: subject + session + channel + cell',
+                'cell1_num': 'Cell 1 number',
+                'cell2_name': 'Cell 2 name: subject + session + channel + cell',
+                'cell2_num': 'Cell 2 number',
+                'lags': 'Covariance lag, s',
+                'sample_num': 'Sample number (corresponds to lag)',
+                'trial_num': 'Trial number (sequential)',
+                'trial_id': 'Trial number in the experiment'                
+            },
+            'fpath_data_column': 'fpath_rvec_cov'
+        },
+        'params': {
+            'nbins_jit': {
+                'desc': 'Number of bins used in jittering process',
                 'value': None,
-                'name_old': 'tf_win_overlap'},
+                'name_old': 'rcov_nbins_jit'},
+            'niter_jit': {
+                'desc': 'Number of jittering iterations',
+                'value': None,
+                'name_old': 'rcov_niter_jit'},
+            'lag_range': {
+                'desc': 'Range of the cross-covariance lags',
+                'value': None,
+                'name_old': 'rcov_lag_range'},
         }
     }
 }
+
             
-fpath_dfg_in = (r'H:\WORK\Camilo\Processing_Pancake_2sess_allchan' 
-                 '\chan_all_epoched_info_(ev=stim1_t)_(t=-1.00-3.00)_TF_(wlen=0.500_wover=0.450_fmax=100.0)')
-fpath_dfg_out = (r'H:\WORK\Camilo\Processing_Pancake_2sess_allchan' 
-                  '\dfg_TF_(ev=stim1_t)_(t=-1.00-3.00)_(wlen=0.500_wover=0.450_fmax=100.0)')
+fpath_dfg_in = (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan'
+                '\cell_epoched_info_(ev=stim1_t)_(t=-1.00-3.00)_rvec_'
+                '(t=500-1200_dt=10)_cov_(bins=5_iter=50_lags=2)')
+fpath_dfg_out =  (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan'
+                '\dfg_rcov_(ev=stim1_t)_(t=-1.00-3.00)_'
+                '(t=500-1200_dt=10)_(bins=5_iter=50_lags=31)')
 
 dfg = DataFileGroup()
 
 # Load description of a data file group
 with open(fpath_dfg_in, 'rb') as fid:
     dfg.outer_table = pickle.load(fid)
-    dfg.init_outer_indices()
 
 # Get parameter values from the table attributes and store them into
 # the processing steps list 'proc_steps'
@@ -130,6 +141,8 @@ for proc_step in proc_steps.values():
             proc_step['function'],
             proc_step['params'],
             proc_step['data_desc_out'])
+
+dfg.change_root('H:', 'D:')
     
 data_desc = dfg.get_data_desc()
 
@@ -151,7 +164,7 @@ for entry in dfg.get_table_entries():
     # Resave dataset
     fpath_data = dfg.get_inner_data_path(entry)
     dirpath_data = os.path.split(fpath_data)[0]
-    fname_out = 'TF_(ev=stim1_t)_(t=-1.00-3.00)_(wlen=0.500_wover=0.450_fmax=100.0).nc'
+    fname_out = 'rcov_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)_(bins=5_iter=50_lags=31).nc'
     fpath_out = os.path.join(dirpath_data, fname_out)
     dfg.save_inner_data(entry, X, fpath_out)
 

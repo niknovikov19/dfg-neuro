@@ -68,7 +68,9 @@ def epoch_spike_data_batch(cell_info, trial_info, lock_event, time_win):
         cell = cell_info.iloc[n]
 
         # Trial info entry for the same subject + session as the current cell
-        id_ = np.where([x['subj_name']==cell.subj_name and x['sess_id']==cell.sess_id for x in trial_info])[0][0]
+        id_ = np.where([x['subj_name']==cell.subj_name
+                        and x['sess_id']==cell.sess_id
+                        for x in trial_info])[0][0]
         ti = trial_info[id_]
         
         # Load spiketrain

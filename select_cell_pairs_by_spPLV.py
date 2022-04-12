@@ -25,7 +25,6 @@ import trial_manager as trl
 import spiketrain_manager as spk
 import firing_rate as fr
 import lfp
-import spike_corr as spcor
 import vis
 
 import data_file_group_2 as dfg

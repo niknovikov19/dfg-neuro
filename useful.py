@@ -201,23 +201,36 @@ def get_kwargs():
             kwargs[key] = values[key]
     return kwargs
 
+def is_scalar(x):
+    if isinstance(x, (list, tuple, np.ndarray)):
+        return False
+    else:
+        return True
 
-def get_xarrray_dim_by_coord(X, coord_name, coord_val=None):
+def get_xarrray_dim_by_coord(X, coord_name, coord_vals=None):
     dim_name = X.coords[coord_name].dims[0]
-    if coord_val is None:
+    if coord_vals is None:
         return dim_name
     else:
-        mask = (X[coord_name] == coord_val)
-        dim_val = X[dim_name][mask].data[0]
-        return (dim_name, dim_val)
+        sc = is_scalar(coord_vals)
+        if sc:
+            coord_vals = [coord_vals]
+        mask = [c in coord_vals for c in X[coord_name].values]
+        dim_vals = X[dim_name][mask].data
+        if sc:
+            dim_vals = dim_vals[0]
+        return (dim_name, dim_vals)
 
+
+def xarray_select_xr(X, coords):
+    index = {}
+    for coord_name, coord_vals in coords.items():
+        dim_name, dim_vals = get_xarrray_dim_by_coord(X, coord_name, coord_vals)
+        index[dim_name] = dim_vals
+    return X[index]
 
 def xarray_select(X, coords):
-    dim_vals = {}
-    for coord_name, coord_val in coords.items():
-        dim_name, dim_val = get_xarrray_dim_by_coord(X, coord_name, coord_val)
-        dim_vals[dim_name] = dim_val
-    return X[dim_vals].values
+    return xarray_select_xr(X, coords).values
 
 
 class XrCoordManager:

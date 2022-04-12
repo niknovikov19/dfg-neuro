@@ -125,11 +125,15 @@ class DataContainerBase:
         if fpath_in is not None:
             self.load(fpath_in)
 
-    def _create_outer_table(self):
+    def _create_outer_table(self, used_proc_steps='all'):
         data_desc = self.get_data_desc()
         col_names = list(data_desc['outer_coords'].keys())
         proc_steps = self.data_proc_tree.proc_steps
-        for step in proc_steps['(1)'].values():
+        if used_proc_steps == 'all':
+            steps = proc_steps['(1)'].values()
+        elif used_proc_steps == 'last':
+            steps = [self.data_proc_tree.get_last_step()]
+        for step in steps:
             step_data_desc = step['data_desc_out']
             if 'fpath_data_column' in step_data_desc:
                 col_names += [step_data_desc['fpath_data_column']]
@@ -144,7 +148,7 @@ class DataContainerBase:
                     step['name'], step['function'], step['params'],
                     step['data_desc_out'])
         
-    def create2(self, proc_steps):
+    def create2(self, proc_steps, used_proc_steps='all'):
         """
         proc_steps[n]
             name
@@ -164,16 +168,23 @@ class DataContainerBase:
                     [name]
                 inner_coords
                     {name: description}
-       """
+        """
         # Create the processing tree
         # TODO: all branches
         self._set_proc_tree(proc_steps)
         # Create outer table
-        self._create_outer_table()
+        self._create_outer_table(used_proc_steps)
         
     def create(self, root_proc_step):
         proc_steps = {'(1)': {'0': root_proc_step}}        
         self.create2(proc_steps)
+        
+    def subset(self, index):
+        dfg_sub = type(self)()
+        dfg_sub.data_proc_tree = copy.deepcopy(self.data_proc_tree)
+        dfg_sub.outer_table = self.outer_table[index].copy()
+        dfg_sub._init_outer_indices()
+        return dfg_sub
         
     def get_data_desc(self):
         return self.data_proc_tree.get_last_step()['data_desc_out']
@@ -226,6 +237,14 @@ class DataContainerBase:
             fpath_old = self.outer_table.at[entry, fpath_col_name]
             fpath_new = fpath_old.replace(old_root, new_root)
             self.outer_table.at[entry, fpath_col_name] = fpath_new
+            
+    def get_table_entries_by_coords(self, outer_coord_vals):
+        mask = np.ones((len(self.outer_table)), dtype=np.bool)        
+        for coord_name, coord_val in outer_coord_vals.items():
+            mask_cur = (self.outer_table[coord_name] == coord_val)
+            mask &= mask_cur
+        return np.where(mask)[0]
+        
 
 # =============================================================================
 # 
@@ -270,8 +289,11 @@ class DataFileGroup(DataContainerBase):
         # Create new entry in the outer table
         new_entry_data = outer_coords.copy()
         new_entry_data.update({self.get_fpath_data_column_name(): ''})
-        self.outer_table = self.outer_table.append(new_entry_data,
-                                                   ignore_index=True)
+        #self.outer_table = self.outer_table.append(new_entry_data,
+        #                                           ignore_index=True)
+        new_entry_data_pd = pd.DataFrame([new_entry_data])
+        self.outer_table = pd.concat(
+            (self.outer_table, new_entry_data_pd), ignore_index=True)
         table_entry = self.get_last_table_entry()
         # Save inner data and store the corresponding path into outer_table
         self.set_inner_data_attrs(table_entry, X)
@@ -288,7 +310,8 @@ class DataFileGroup(DataContainerBase):
         fpath_data = self.get_inner_data_path(table_entry)
         #print('--------------------------')
         #print(fpath_data)
-        X = xr.open_dataset(fpath_data, engine='h5netcdf')
+        #X = xr.open_dataset(fpath_data, engine='h5netcdf')
+        X = xr.load_dataset(fpath_data, engine='h5netcdf')
         return X
     
     def save_inner_data(self, table_entry, X, fpath_out, save_inner=True):
@@ -309,9 +332,12 @@ class DataFileGroup(DataContainerBase):
         parent_steps = self.data_proc_tree.get_parent_steps(last_step_id)
         parent_columns = [step['data_desc_out']['fpath_data_column']
                         for step in parent_steps]
-        parent_files = [
-                self.outer_table.at[table_entry, col_name]
-                for col_name in parent_columns]
+        try:
+            parent_files = [
+                    self.outer_table.at[table_entry, col_name]
+                    for col_name in parent_columns]
+        except:
+            parent_files = []
         attrs = {
             'data_desc': data_desc,
             'proc_steps': self.data_proc_tree.proc_steps,

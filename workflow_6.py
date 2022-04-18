@@ -70,22 +70,30 @@ with open(fpath_cell_epoched_info, 'rb') as fid:
 
 
 # Time ROIs to calculate spike-TF PLV
+# =============================================================================
+# tROI_descs = [
+#         {'name': 'del1', 'limits': {'time': [0.5, 1.2]}},
+#         {'name': 'del11', 'limits': {'time': [0.5, 0.85]}},
+#         {'name': 'del12', 'limits': {'time': [0.85, 1.2]}},
+#         {'name': 'stim', 'limits': {'time': [0.05, 0.3]}},
+#         {'name': 'bl', 'limits': {'time': [-0.7, -0.2]}},
+# ]
+# tROIset_name = 'tROIset1'
+# =============================================================================
 tROI_descs = [
-        {'name': 'del1', 'limits': {'time': [0.5, 1.2]}},
-        {'name': 'del11', 'limits': {'time': [0.5, 0.85]}},
-        {'name': 'del12', 'limits': {'time': [0.85, 1.2]}},
-        {'name': 'stim', 'limits': {'time': [0.05, 0.3]}},
-        {'name': 'bl', 'limits': {'time': [-0.7, -0.2]}},
+        {'name': 'del1', 'limits': {'time': [0.5, 1.2]}}
 ]
-tROIset_name = 'tROIset1'
+tROIset_name = 'tROI=del1'
 
 # Use a subset of channels
-Nchan_used = 25
+#Nchan_used = 25
+Nchan_used = 'all'
 dfg_tf_chan_subset = copy.deepcopy(dfg_tf)
-dfg_tf_chan_subset.outer_table = dfg_tf_chan_subset.outer_table[:Nchan_used]
+if Nchan_used != 'all':
+    dfg_tf_chan_subset.outer_table = dfg_tf_chan_subset.outer_table[:Nchan_used]
 
 # Calculate spike-TF PLV
-fname_cache = f'dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_tROI_(nchan={Nchan_used})'
+fname_cache = f'dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_{tROIset_name}_(nchan={Nchan_used})'
 f = lambda: spPLV.calc_dfg_spike_TF_PLV(
         dfg_tf_chan_subset, cell_epoched_info, tROI_descs, tROIset_name)
 dfg_spPLV_tROI = run_or_load(f, fname_cache, recalc=False)

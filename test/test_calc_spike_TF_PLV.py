@@ -11,10 +11,10 @@ import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import numpy as np
 #import pandas as pd
-#import xarray as xr
+import xarray as xr
 import pickle as pk
 
 dirpath_file = os.path.dirname(os.path.abspath(__file__))
@@ -44,44 +44,77 @@ with open(fpath_cell_epoched_info, 'rb') as fid:
 # Time ROIs to calculate Spike-TF PLV
 tROI_descs = [
         {'name': 'del1', 'limits': {'time': [0.5, 1.2]}},
-        {'name': 'del11', 'limits': {'time': [0.5, 0.85]}},
 ]
 tROIset_name = 'tROIset_test'
 
 # Number of channels and cells to work with
-Nchan_used = 2 
-Ncell_used = 3
+Nchan_used = 2
+Ncell_used = 10
+nonPL = True
 
 # Calculate PLV
 dfg_tf.outer_table = dfg_tf.outer_table[:Nchan_used]
+dfg_spPLV = None
 dfg_spPLV = spPLV.calc_dfg_spike_TF_PLV(dfg_tf, cell_epoched_info, tROI_descs,
-                                        tROIset_name, Ncell_used)
+                                        tROIset_name, nonPL, Ncell_used)
 
-# Save the result
-fpath_out = r'D:\WORK\Camilo\TEST\spPLV_test\spPLV_test_2'
-dfg_spPLV.save(fpath_out)
+# =============================================================================
+# # Save the result
+# fpath_out = r'D:\WORK\Camilo\TEST\spPLV_test\spPLV_test_3'
+# dfg_spPLV.save(fpath_out)
+# 
+# X = dfg_spPLV.load_inner_data(1)
+# plt.figure()
+# plt.imshow(np.real(X.PLV[:,0,:,0]), aspect='auto')
+# #plt.imshow(np.angle(X.PLV[:,0,:,0]), aspect='auto')
+# 
+# Y = X.PLV[:,0,:,0].mean(axis=1)
+# plt.figure(); plt.plot(Y)
+# 
+# X = dfg_tf.load_inner_data(1)
+# Y = np.mean(np.abs(X.TF), 2)
+# plt.figure()
+# plt.imshow(Y, aspect='auto')
+# 
+# plt.figure(); plt.imshow(np.abs(X.TF[:,:,0]), aspect='auto')
+# plt.figure(); plt.imshow(np.angle(X.TF[:,:,1]), aspect='auto')
+# =============================================================================
 
-# Compare with the old result
-fpath_old = r'D:\WORK\Camilo\TEST\spPLV_test\spPLV_test'
-dfg_spPLV_old = dfg.DataFileGroup(fpath_old)
-
-for entry in range(len(dfg_spPLV_old.outer_table)):
-
-    fpath_data = dfg_spPLV_old.outer_table.at[entry, 'fpath_spPLV_tROI']
-    fpath_data = fpath_data.replace('H:', 'D:')
-    dfg_spPLV_old.outer_table.at[entry, 'fpath_spPLV_tROI'] = fpath_data
-    
-    X_new = dfg_spPLV.load_inner_data(entry)
-    X_old = dfg_spPLV_old.load_inner_data(entry)
-    
-    for var_name in X_new.data_vars:
-    
-        x_new = X_new[var_name].data 
-        x_old = X_old[var_name].data 
+for n in range(1, Nchan_used):
+    X = dfg_spPLV.load_inner_data(n)
+    Nspikes = X['Nspikes'].sum(dim='trial_num')
+    PLV = (X['PLV'] * X['Nspikes']).sum(dim='trial_num') / Nspikes
+    PLV = np.abs(PLV)
+    plt.figure()
+    for m in range(Ncell_used):
+        plt.plot(PLV.freq, PLV[:,0,m])
+    plt.xlabel('Frequency')
+    plt.title(f'Spike-field coherence (chan = {n})')
         
-        b = (x_new != x_old)
-        print(np.all(np.isnan(x_new[b])))
-        print(np.all(np.isnan(x_old[b])))
+
+# =============================================================================
+# # Compare with the old result
+# fpath_old = r'D:\WORK\Camilo\TEST\spPLV_test\spPLV_test'
+# dfg_spPLV_old = dfg.DataFileGroup(fpath_old)
+# 
+# for entry in range(len(dfg_spPLV_old.outer_table)):
+# 
+#     fpath_data = dfg_spPLV_old.outer_table.at[entry, 'fpath_spPLV_tROI']
+#     fpath_data = fpath_data.replace('H:', 'D:')
+#     dfg_spPLV_old.outer_table.at[entry, 'fpath_spPLV_tROI'] = fpath_data
+#     
+#     X_new = dfg_spPLV.load_inner_data(entry)
+#     X_old = dfg_spPLV_old.load_inner_data(entry)
+#     
+#     for var_name in X_new.data_vars:
+#     
+#         x_new = X_new[var_name].data 
+#         x_old = X_old[var_name].data 
+#         
+#         b = (x_new != x_old)
+#         print(np.all(np.isnan(x_new[b])))
+#         print(np.all(np.isnan(x_old[b])))
+# =============================================================================
 
 
 

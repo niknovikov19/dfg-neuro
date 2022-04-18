@@ -66,46 +66,13 @@ proc_steps = {
                 'value': None,
                 'name_old': 'epoching_time_win'},
         }
-    },
-    '2': {
-        'name': 'Time-frequency transform',
-        'function': 'calc_lfp_tf()',
-        'data_desc_out':  {
-            'variables': {'TF': 'Time-frequency complex amplitude'},
-            'outer_dims': ['chan_name'],
-            'outer_coords': {
-                'chan_name': 'Subject + session + channel',
-            },
-            'inner_dims': ['freq', 'time', 'trial_num'],
-            'inner_coords': {
-                'freq': 'Frequency, Hz',
-                'time': 'Time, s',
-                'trial_num': 'Trial number (sequential)',
-                'trial_id': 'Trial number in the experiment'
-            },
-            'fpath_data_column': 'fpath_tf'
-        },
-        'params': {
-            'fmax': {
-                'desc': 'Upper frequency in TF transform, Hz',
-                'value': None,
-                'name_old': 'tf_fmax'},
-            'time_window_len': {
-                'desc': 'Length of the temporal window in TF transform, s',
-                'value': None,
-                'name_old': 'tf_win_len'},
-            'time_window_overlap': {
-                'desc': 'Overlap of adjacent time windows, s',
-                'value': None,
-                'name_old': 'tf_win_overlap'},
-        }
     }
 }
             
-fpath_dfg_in = (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan' 
-                 '\chan_all_epoched_info_(ev=stim1_t)_(t=-1.00-3.00)_TF_(wlen=0.500_wover=0.450_fmax=100.0)')
+fpath_dfg_in = (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan'
+                '\chan_all_epoched_info_(ev=stim1_t)_(t=-1.00-3.00)')
 fpath_dfg_out = (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan' 
-                  '\dfg_TF_(ev=stim1_t)_(t=-1.00-3.00)_(wlen=0.500_wover=0.450_fmax=100.0)')
+                  '\dfg_LFP_(ev=stim1_t)_(t=-1.00-3.00)')
 
 dfg = DataFileGroup()
 
@@ -130,7 +97,7 @@ for proc_step in proc_steps.values():
             proc_step['function'],
             proc_step['params'],
             proc_step['data_desc_out'])
-    
+
 # Change root folder
 dfg.change_root('H:', 'D:')
     
@@ -141,7 +108,7 @@ pbar = tqdm(total=len(dfg.outer_table))
 for entry in dfg.get_table_entries():
     
     # Load dataset
-    X = dfg.load_inner_data(entry)
+    X = dfg.load_inner_data(entry, h5=False)
     
     # Give a name to the dataset variable
     assert(len(data_desc['variables']) == 1)
@@ -154,7 +121,7 @@ for entry in dfg.get_table_entries():
     # Resave dataset
     fpath_data = dfg.get_inner_data_path(entry)
     dirpath_data = os.path.split(fpath_data)[0]
-    fname_out = 'TF_(ev=stim1_t)_(t=-1.00-3.00)_(wlen=0.500_wover=0.450_fmax=100.0).nc'
+    fname_out = 'LFP_(ev=stim1_t)_(t=-1.00-3.00).nc'
     fpath_out = os.path.join(dirpath_data, fname_out)
     dfg.save_inner_data(entry, X, fpath_out)
 

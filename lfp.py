@@ -239,7 +239,8 @@ def make_hilbert_batch(chan_epoched_info):
  
            
 # Perform time-frequency transformation of epoched LFP data
-def calc_lfp_tf(chan_epoched_info, win_len=0.5, win_overlap=0.45, fmax=100, need_recalc=False):
+def calc_lfp_tf(chan_epoched_info, win_len=0.5, win_overlap=0.45, fmax=100,
+                need_recalc=False):
     
     print('calc_lfp_tf')
 
@@ -311,7 +312,7 @@ def calc_lfp_tf(chan_epoched_info, win_len=0.5, win_overlap=0.45, fmax=100, need
                 Wnan = np.nan * np.ones((len(ff), len(tt), Ntrials), dtype='complex128')
                 W = xr.DataArray(Wnan, coords=coords, dims=['freq', 'time', 'trial_num'])
                 
-            # Store TF of the currenttrial
+            # Store TF of the current trial
             W[:,:,m] = Wcur
             
             '''

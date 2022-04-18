@@ -26,7 +26,8 @@ import useful as usf
 
 
 def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
-                          tROIset_name, ncell_max=None):
+                                 tROIset_name, non_phase_locked=False,
+                                 ncell_max='all'):
 
     # Channel, subject, session
     # TODO: instead of parsing chan name to obtain subj + session,
@@ -43,7 +44,7 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
     cells = cell_epoched_info[cell_mask]
     
     # Limit the number of cells (for testing purposes)
-    if ncell_max is not None:
+    if ncell_max != 'all':
         cells = cells[:ncell_max]
     
     NROI = len(tROI_descs)
@@ -79,7 +80,7 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
     
     for cell_num in range(Ncell):
 
-        print(f'Cell: {cell_num} / {Ncell}')
+        print(f'Chan: {chan_name}  Cell: {cell_num} / {Ncell}')
         t0 = time.time()
         
         # Load spiketrain
@@ -87,6 +88,11 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
         with open(cell.fpath_epoched, 'rb') as fid:
             spikes = pk.load(fid)
             spikes = spikes.values
+        
+        if non_phase_locked:
+            X = X_in.TF - X_in.TF.mean(dim='trial_num')
+        else:
+            X = X_in.TF         
         
         for trial_num, trial_spikes in enumerate(spikes):            
             for tROI_num, tROI in enumerate(tROI_descs):
@@ -101,7 +107,8 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
                     continue
                 
                 # Spike-triggerred LFP phase
-                PLV = X_in.TF.isel(trial_num=trial_num).interp(time=ROI_spikes)
+                PLV = X.isel(trial_num=trial_num).interp(
+                    time=ROI_spikes, method='nearest', assume_sorted=False)
                 PLV /= np.abs(PLV)
                 PLV = PLV.mean(dim='time').data
                 
@@ -119,7 +126,8 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
 
 
 def calc_dfg_spike_TF_PLV(dfg_in, cell_epoched_info, tROI_descs,
-                          tROIset_name, ncell_max=None):
+                          tROIset_name, non_phase_locked=False, 
+                          ncell_max='all'):
     """ Calculate spike-field coherence for each channel-cell pair.
     
     The result is calculated for each frequency, in the time intervals
@@ -136,13 +144,13 @@ def calc_dfg_spike_TF_PLV(dfg_in, cell_epoched_info, tROI_descs,
     
     # Dictionary of parameters
     param_names = ['tROI_descs', 'tROIset_name', 'cell_epoched_info',
-                   'ncell_max']
+                   'non_phase_locked', 'ncell_max']
     local_vars = locals()
     params = {par_name: local_vars[par_name] for par_name in param_names}
     
     # Name of the dfg's outer table column for the paths to Dataset files
     fpath_data_column = 'fpath_spPLV_tROI'
-        
+
     # Function that converts the parameters dict to the form suitable
     # for storing into a processing step description
     def gen_proc_step_params(par):
@@ -154,14 +162,20 @@ def calc_dfg_spike_TF_PLV(dfg_in, cell_epoched_info, tROI_descs,
                 'desc': 'Name of the ROI set',
                 'value': str(par['tROIset_name'])},
             'cells': {
-                'desc': 'Cells that provide spike trains',
-                'value': 'All from the same session'}
+                'desc': 'Number of cells that provide spike trains',
+                'value': str(par['ncell_max'])},
+            'non_phase_locked': {
+                'desc': 'Exclude phase-locked component of LFP',
+                'value': str(par['non_phase_locked'])}
         }
         return par_out
     
     # Function for converting input to output inner data path
     def gen_fpath(fpath_in, params):
-        fpath_data_postfix = 'spPLV_tROI'
+        tROIset_name = params['tROIset_name']
+        ncell_max = params['ncell_max']
+        npl = int(params['non_phase_locked'])
+        fpath_data_postfix = f'spPLV_({tROIset_name}_Ncell={ncell_max}_npl={npl})'
         fpath_noext, ext  = os.path.splitext(fpath_in)
         return fpath_noext + '_' + fpath_data_postfix + ext
     
@@ -181,7 +195,7 @@ def calc_dfg_spike_TF_PLV(dfg_in, cell_epoched_info, tROI_descs,
     }
     
     # Call calc_dataset_ROIs() for each inner dataset of the DataFileGroup
-    dfg_out = dfg.apply_dfg_inner_proc(
+    dfg_out = dfg.apply_dfg_inner_proc_mt(
             dfg_in, _calc_dfg_spike_TF_PLV_inner, params, proc_step_name,
             gen_proc_step_params, fpath_data_column, gen_fpath,
             vars_new_descs, coords_new_descs)

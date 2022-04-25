@@ -78,10 +78,11 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
     data_Nspikes = xr.DataArray(Xnan, coords=coords_Nspikes,
                           dims=['tROI_num', 'trial_num', 'cell_id'])
     
+    tt0 = time.time()
+
     for cell_num in range(Ncell):
 
-        print(f'Chan: {chan_name}  Cell: {cell_num} / {Ncell}')
-        t0 = time.time()
+        #print(f'Chan: {chan_name}  Cell: {cell_num} / {Ncell}')
         
         # Load spiketrain
         cell = cells.iloc[cell_num]
@@ -89,10 +90,19 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
             spikes = pk.load(fid)
             spikes = spikes.values
         
+        # Exclude phase-locked component if required
         if non_phase_locked:
             X = X_in.TF - X_in.TF.mean(dim='trial_num')
         else:
-            X = X_in.TF         
+            X = X_in.TF
+        
+        # Time bins
+        tvec = X.time.values
+        dt = tvec[1] - tvec[0]
+        
+        # Frequencies
+        fvec = X.freq.values    
+        fvec = fvec.reshape((len(fvec), 1))
         
         for trial_num, trial_spikes in enumerate(spikes):            
             for tROI_num, tROI in enumerate(tROI_descs):
@@ -106,18 +116,33 @@ def _calc_dfg_spike_TF_PLV_inner(X_in, cell_epoched_info, tROI_descs,
                 if Nspikes == 0:
                     continue
                 
-                # Spike-triggerred LFP phase
-                PLV = X.isel(trial_num=trial_num).interp(
-                    time=ROI_spikes, method='nearest', assume_sorted=False)
+                # Select time bins within the given time ROI                
+                time_mask = ((tvec >= t_range[0]) & (tvec < t_range[1]))
+                tvec_ROI = tvec[time_mask]
+                
+                # Spectrogram for a given trial
+                XROI = X[:, :, trial_num].values
+                XROI = XROI[:, time_mask]
+                
+                # Time bins that contain spikes, and time differences
+                # between spikes and centers of corresponding bins
+                spike_times_rel = ROI_spikes - tvec_ROI[0]
+                spike_bins = np.floor(spike_times_rel / dt).astype(int)
+                spike_dt_vec = spike_times_rel - spike_bins * dt
+                spike_dt_vec = spike_dt_vec.reshape((1, len(spike_dt_vec)))
+                
+                # Calculate PLV
+                PLV = XROI[:, spike_bins]
                 PLV /= np.abs(PLV)
-                PLV = PLV.mean(dim='time').data
+                PLV *= np.exp(2 * np.pi * fvec * spike_dt_vec * 1j)
+                PLV = np.mean(PLV, axis=1)
                 
                 # Store into output arrays
                 data_PLV[:, tROI_num, trial_num, cell_num] = PLV
                 data_Nspikes[tROI_num, trial_num, cell_num] = Nspikes
                 
-        dt = time.time() - t0
-        print(f'dt = {dt}')
+    dtt = time.time() - tt0
+    print(f'dt = {dtt}')
         
     # Collect the output dataset
     data_vars = {'PLV': data_PLV, 'Nspikes': data_Nspikes}

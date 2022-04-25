@@ -9,6 +9,7 @@ import inspect
 import itertools
 import os
 import re
+import sys
 
 import numpy as np
 import pandas as pd
@@ -290,8 +291,31 @@ def list_wrap(x):
     else:
         return [x] 
     
-    
-#def copy_files(fpath_list, dirpath_base_old, dirpath_base_new):
+
+# =============================================================================
+# def mkdir_rec(dirpath):
+#     dirpath = os.path.normpath(dirpath)
+#     dir_names = dirpath.split(os.sep)
+#     dirpath_cur = ''
+#     for dir_name in dir_names:
+#         dirpath_cur = os.path.join(dirpath_cur, dir_name)
+#         if not os.path.exists(dirpath_cur):
+#             sys.m
+# =============================================================================
+
+import shutil
+from tqdm import tqdm
+
+def copy_files(fpath_list, dirpath_base_old, dirpath_base_new):
+    pbar = tqdm(total=len(fpath_list))
+    for fpath_in in fpath_list:
+        fpath_out = fpath_in.replace(dirpath_base_old, dirpath_base_new)
+        dirpath_out, fname_out = os.path.split(fpath_out)
+        os.makedirs(dirpath_out)
+        shutil.copy(fpath_in, fpath_out)
+        pbar.update()
+    pbar.close()
+        
     
     
     

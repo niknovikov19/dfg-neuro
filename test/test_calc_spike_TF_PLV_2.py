@@ -24,6 +24,7 @@ sys.path.append(dirpath_pkg)
 
 import data_file_group_2 as dfg
 import spike_TF_PLV as spPLV
+import useful as usf
 
 # Root paths for the data and the processing results
 dirpath_root = r'D:\WORK\Camilo'
@@ -107,10 +108,24 @@ plt.title(f'Spike-field coherence (chan = {n})')
 fpath_in = r"D:\WORK\Camilo\Processing_Pancake_2sess_allchan\dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_tROI=del1_(nchan=all_npl)"
 dfg_spPLV = dfg.DataFileGroup(fpath_in)
 
-entry = dfg_spPLV.get_table_entries_by_coords({'chan_name': 'Pancake_20130923_1_ch126'})
+#entry = dfg_spPLV.get_table_entries_by_coords({'chan_name': 'Pancake_20130923_1_ch126'})[0]
+#X = dfg_spPLV.load_inner_data(entry)
 
-X = dfg_spPLV.load_inner_data(entry)
-        
+X = dfg_spPLV.load_inner_data(94)
+
+Nspikes = X['Nspikes'].sum(dim='trial_num')
+PLV = (X['PLV'] * X['Nspikes']).sum(dim='trial_num') / Nspikes
+PLV = np.abs(PLV)
+
+#(cell_id_dim, cell_id) = usf.get_xarrray_dim_by_coord(
+#    X, 'cell_name', 'Pancake_20130923_1_ch127_c1')
+
+plt.figure()
+plt.plot(PLV.freq, PLV[:, :, 0])
+plt.plot(PLV.freq, PLV[:, :, 1])
+plt.plot(PLV.freq, PLV[:, :, 21])
+plt.plot(PLV.freq, PLV[:, :, 46])
+plt.xlabel('Frequency')
 
 # =============================================================================
 # # Compare with the old result

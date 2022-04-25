@@ -545,15 +545,15 @@ def apply_dfg_inner_proc_mt(dfg_in: DataFileGroup,
             dfg_out.save_inner_data(entry, X_out, fpath_out)
     
     # Initialize progress bar
-    pbar = tqdm(total=dfg_in.get_num_table_entries())
+    #pbar = tqdm(total=dfg_in.get_num_table_entries())
     
     # Run processing of each table entry in a separate thread
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for entry in dfg_out.get_table_entries():
             executor.submit(thread_proc, entry)
-            pbar.update()
+            #pbar.update()
 
-    pbar.close()
+    #pbar.close()
     
     return dfg_out
 

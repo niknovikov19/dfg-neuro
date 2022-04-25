@@ -93,9 +93,10 @@ if Nchan_used != 'all':
     dfg_tf_chan_subset.outer_table = dfg_tf_chan_subset.outer_table[:Nchan_used]
 
 # Calculate spike-TF PLV
-fname_cache = f'dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_{tROIset_name}_(nchan={Nchan_used})'
+fname_cache = f'dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_{tROIset_name}_(nchan={Nchan_used}_npl)'
 f = lambda: spPLV.calc_dfg_spike_TF_PLV(
-        dfg_tf_chan_subset, cell_epoched_info, tROI_descs, tROIset_name)
+        dfg_tf_chan_subset, cell_epoched_info, tROI_descs, tROIset_name,
+        non_phase_locked=True)
 dfg_spPLV_tROI = run_or_load(f, fname_cache, recalc=False)
 
 
@@ -138,7 +139,8 @@ def fun_nROI_mult(X, dims):
 # Calculate freq ROIs (don't merge with time ROIs)
 ROI_coords = ['freq']
 coords_new_descs = {'fROI_num': 'Frequency ROI'}
-fname_cache = f'dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_tROI_fROI_(nchan={Nchan_used})'
+fname_cache = (f'dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_'
+               f'({tROIset_name})_fROI_(nchan={Nchan_used}_npl)')
 f = lambda: roi.calc_data_file_group_ROIs(
         dfg_spPLV_tROI, ROI_coords, fROI_descs,
         reduce_fun={'PLV': fun_mean, 'Nspikes': fun_id},
@@ -150,74 +152,78 @@ dfg_spPLV_tROI_fROI = run_or_load(f, fname_cache, recalc=False)
 
 
 # PLV statistics over trials
-fname_cache = f'dfg_spPLV_(ev=stim1_t)_(TF_0.5_0.4_100)_tROI_fROI_pval_(nchan={Nchan_used})'
+fname_cache = (f'dfg_spPLV_(ev=stim1_t)_(TF_0.5_0.4_100)_({tROIset_name})_'
+               f'fROI_pval_(nchan={Nchan_used}_npl)')
 f = lambda: spPLV.calc_dfg_spPLV_trial_stat(dfg_spPLV_tROI_fROI)
 dfg_spPLV_tROI_fROI_pval = run_or_load(f, fname_cache, recalc=False)
 
 # PLV statistics over trials -> table
-fname_cache = f'tbl_spPLV_(ev=stim1_t)_(TF_0.5_0.4_100)_tROI_fROI_pval_(nchan={Nchan_used})'
+fname_cache = (f'tbl_spPLV_(ev=stim1_t)_(TF_0.5_0.4_100)_({tROIset_name})_'
+               f'fROI_pval_(nchan={Nchan_used}_npl)')
 f = lambda: dfg.dfg_to_table(dfg_spPLV_tROI_fROI_pval)
 tbl_spPLV_tROI_fROI_pval = run_or_load(f, fname_cache, recalc=False,
                                        data_type='tbl')
 
-# Select cell pairs with significant PLV
-fname_cache = f'tbl_spPLV_(ev=stim1_t)_(TF_0.5_0.4_100)_cell_pairs_(nchan={Nchan_used})'
-f = lambda: select_cell_pairs_by_spPLV(tbl_spPLV_tROI_fROI_pval,
-                                       tROI_name='del1', fROI_name='beta',
-                                       pthresh=0.05, rmax=50)
-tbl_signif_spPLV_cell_pairs = run_or_load(f, fname_cache, recalc=False,
-                                          data_type='tbl')
-
-
-# TF complex amplitude -> TF power (non-phase-locked)
-fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)'
-f = lambda: lfp.calc_dfg_TFpow(dfg_tf, subtract_mean=True)
-dfg_tfpow = run_or_load(f, fname_cache, recalc=False)
-
-# TFpow time ROIs
-fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_tROI'
-f = lambda: roi.calc_data_file_group_ROIs(
-        dfg_tfpow, ROI_coords=['time'], ROI_descs=tROI_descs,
-        reduce_fun=fun_mean, ROIset_dim_name='tROI',
-        fpath_data_column='fpath_TFpow_tROI', fpath_data_postfix='tROI',
-        coords_new_descs={'tROI_num': 'Time ROI'}, add_ROIsz_vars=True)
-dfg_tfpow_tROI = run_or_load(f, fname_cache, recalc=False)
-
-# TFpow time + frequency ROIs
-fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_tROI_fROI'
-f = lambda: roi.calc_data_file_group_ROIs(
-        dfg_tfpow_tROI, ROI_coords=['freq'], ROI_descs=fROI_descs,
-        reduce_fun=fun_mean, ROIset_dim_name='fROI',
-        fpath_data_column='fpath_TFpow_tROI_fROI', fpath_data_postfix='fROI',
-        coords_new_descs={'fROI_num': 'Frequency ROI'}, add_ROIsz_vars=True)
-dfg_tfpow_tROI_fROI = run_or_load(f, fname_cache, recalc=False)
-
-
-# Firing rates
-fname_cache = 'dfg_rvec_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)'
-def f(): raise NotImplementedError('Rate calculation (dfg) not implemented')
-dfg_rvec = run_or_load(f, fname_cache, recalc=False)
-
-# Firing rate covariance
-nbins_jit = 5
-niter_jit = 50
-lag_range = (-15, 15)
-time_range = (0.85, 1.2)
-Nlags = lag_range[1] - lag_range[0] + 1
-fname_cache = ('dfg_rcov_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)_' +
-               f'(bins={nbins_jit}_iter={niter_jit}_nlags={Nlags}_' +
-               f't={time_range[0]}-{time_range[1]})')
-f = lambda: rcov.calc_dfg_rvec_cov_nojit(
-        dfg_rvec, nbins_jit, niter_jit, time_range, lag_range)
-dfg_rcov = run_or_load(f, fname_cache, recalc=True)
-
-
-# Same-dif trial pairs
-ROIset_same = {'fROI_name': 'beta', 'tROI_name': 'del12'}
-ROIset_dif = {'fROI_name': 'beta', 'tROI_name': 'del11'}
-fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_trial_pairs'
-f = lambda: dfg_find_trial_pairs_by_samedif_tfpow(
-        dfg_tfpow_tROI_fROI, ROIset_same, ROIset_dif)
-dfg_tfpow_trial_pairs = run_or_load(f, fname_cache, recalc=False)
+# =============================================================================
+# # Select cell pairs with significant PLV
+# fname_cache = f'tbl_spPLV_(ev=stim1_t)_(TF_0.5_0.4_100)_cell_pairs_(nchan={Nchan_used}_npl)'
+# f = lambda: select_cell_pairs_by_spPLV(tbl_spPLV_tROI_fROI_pval,
+#                                        tROI_name='del1', fROI_name='beta',
+#                                        pthresh=0.05, rmax=50)
+# tbl_signif_spPLV_cell_pairs = run_or_load(f, fname_cache, recalc=False,
+#                                           data_type='tbl')
+# 
+# 
+# # TF complex amplitude -> TF power (non-phase-locked)
+# fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)'
+# f = lambda: lfp.calc_dfg_TFpow(dfg_tf, subtract_mean=True)
+# dfg_tfpow = run_or_load(f, fname_cache, recalc=False)
+# 
+# # TFpow time ROIs
+# fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_tROI'
+# f = lambda: roi.calc_data_file_group_ROIs(
+#         dfg_tfpow, ROI_coords=['time'], ROI_descs=tROI_descs,
+#         reduce_fun=fun_mean, ROIset_dim_name='tROI',
+#         fpath_data_column='fpath_TFpow_tROI', fpath_data_postfix='tROI',
+#         coords_new_descs={'tROI_num': 'Time ROI'}, add_ROIsz_vars=True)
+# dfg_tfpow_tROI = run_or_load(f, fname_cache, recalc=False)
+# 
+# # TFpow time + frequency ROIs
+# fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_tROI_fROI'
+# f = lambda: roi.calc_data_file_group_ROIs(
+#         dfg_tfpow_tROI, ROI_coords=['freq'], ROI_descs=fROI_descs,
+#         reduce_fun=fun_mean, ROIset_dim_name='fROI',
+#         fpath_data_column='fpath_TFpow_tROI_fROI', fpath_data_postfix='fROI',
+#         coords_new_descs={'fROI_num': 'Frequency ROI'}, add_ROIsz_vars=True)
+# dfg_tfpow_tROI_fROI = run_or_load(f, fname_cache, recalc=False)
+# 
+# 
+# # Firing rates
+# fname_cache = 'dfg_rvec_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)'
+# def f(): raise NotImplementedError('Rate calculation (dfg) not implemented')
+# dfg_rvec = run_or_load(f, fname_cache, recalc=False)
+# 
+# # Firing rate covariance
+# nbins_jit = 5
+# niter_jit = 50
+# lag_range = (-15, 15)
+# time_range = (0.85, 1.2)
+# Nlags = lag_range[1] - lag_range[0] + 1
+# fname_cache = ('dfg_rcov_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)_' +
+#                f'(bins={nbins_jit}_iter={niter_jit}_nlags={Nlags}_' +
+#                f't={time_range[0]}-{time_range[1]})')
+# f = lambda: rcov.calc_dfg_rvec_cov_nojit(
+#         dfg_rvec, nbins_jit, niter_jit, time_range, lag_range)
+# dfg_rcov = run_or_load(f, fname_cache, recalc=True)
+# 
+# 
+# # Same-dif trial pairs
+# ROIset_same = {'fROI_name': 'beta', 'tROI_name': 'del12'}
+# ROIset_dif = {'fROI_name': 'beta', 'tROI_name': 'del11'}
+# fname_cache = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_trial_pairs'
+# f = lambda: dfg_find_trial_pairs_by_samedif_tfpow(
+#         dfg_tfpow_tROI_fROI, ROIset_same, ROIset_dif)
+# dfg_tfpow_trial_pairs = run_or_load(f, fname_cache, recalc=False)
+# =============================================================================
 
 

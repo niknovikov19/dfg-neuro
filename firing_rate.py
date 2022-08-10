@@ -28,7 +28,9 @@ def calc_firing_rates_by_stim_types(cell_info, trial_info, subj_used=None, sess_
     time_win = np.array([0.3, 1])
     
     # Indices in trial_info with appropriate subject + session    
-    subj_sess_mask = [(x['subj_name'] in subj_used) and (x['sess_id'] in sess_used) for x in trial_info]
+    subj_sess_mask = [
+        (x['subj_name'] in subj_used) and (x['sess_id'] in sess_used)
+        for x in trial_info]
     subj_sess_idx = np.where(subj_sess_mask)[0]
     
     # Cycle over subject + sesssion combinations 
@@ -45,16 +47,23 @@ def calc_firing_rates_by_stim_types(cell_info, trial_info, subj_used=None, sess_
         Nstim = len(stim_codes_uni)
         
         # Cells recorded in this session
-        cell_mask = (cell_info.subj_name == ti['subj_name']) & (cell_info.sess_id == ti['sess_id'])
+        cell_mask = ((cell_info.subj_name == ti['subj_name']) &
+                     (cell_info.sess_id == ti['sess_id']))
         cell_tbl = cell_info[cell_mask]
         Ncell = len(cell_tbl)
         
         # Matrix of firing rates (cells, stim_codes), averaged over trials and samples
-        coords = {'cell_id': cell_tbl.cell_id, 'cell_name': ('cell_id', cell_tbl.cell_name), 'stim_code': stim_codes_uni}
-        R = xr.DataArray(np.zeros((Ncell,Nstim)), coords=coords, dims=['cell_id', 'stim_code'])
+        coords = {'cell_id': cell_tbl.cell_id,
+                  'cell_name': ('cell_id', cell_tbl.cell_name),
+                  'stim_code': stim_codes_uni}
+        R = xr.DataArray(np.zeros((Ncell,Nstim)), coords=coords,
+                         dims=['cell_id', 'stim_code'])
         
-        coords = {'cell_id': cell_tbl.cell_id, 'cell_name': ('cell_id', cell_tbl.cell_name), 'trial_id': range(Ntrial0)}
-        Nspikes_mat = xr.DataArray(np.zeros((Ncell,Ntrial0)), coords=coords, dims=['cell_id', 'trial_id'])
+        coords = {'cell_id': cell_tbl.cell_id,
+                  'cell_name': ('cell_id', cell_tbl.cell_name),
+                  'trial_id': range(Ntrial0)}
+        Nspikes_mat = xr.DataArray(np.zeros((Ncell,Ntrial0)), coords=coords,
+                                   dims=['cell_id', 'trial_id'])
         
         # Cycle over cells
         for n in range(Ncell):
@@ -247,7 +256,9 @@ plt.figure()
 plt.plot(st, np.zeros(len(st)), '.')
 '''
 
-def calc_firing_rates_by_stim_types_2(rvec_info, trial_info, time_win, use_log=False, outlier_thresh=None, dirpath_out_img=None):
+def calc_firing_rates_by_stim_types_2(rvec_info, trial_info, time_win,
+                                      use_log=False, outlier_thresh=None,
+                                      dirpath_out_img=None):
     
     if dirpath_out_img is not None:
         plt.figure()
@@ -263,7 +274,8 @@ def calc_firing_rates_by_stim_types_2(rvec_info, trial_info, time_win, use_log=F
     # Initialize output table
     tbl_out = rvec_info.copy()
     col_names_new = [f'r_stim{x}' for x in stim_codes_all_uni]
-    col_names_new += ['stim_code_rmax', 'stim_code_rmin', 'pF_anova', 'pT_minmax']
+    col_names_new += ['stim_code_rmax', 'stim_code_rmin',
+                      'pF_anova', 'pT_minmax']
     tbl_out[col_names_new] = np.nan    
     
     for sess_num in range(Nsess):

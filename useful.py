@@ -53,6 +53,13 @@ def parse_chan_name(s):
         
     return d
 
+# =============================================================================
+# def get_chan_id_by_cell(cell_name, cell_info_tbl):
+#     ci = cell_info_tbl[cell_info_tbl.cell_name == cell_name]
+#     chan_id = ci.chan_id.item()
+#     return chan_id
+# =============================================================================
+    
 def get_chan_by_cell(cell_name, cell_info_tbl, chan_info_tbl):
     ci = cell_info_tbl[cell_info_tbl.cell_name == cell_name]
     chan_id = ci.chan_id.item()
@@ -213,13 +220,19 @@ def get_xarrray_dim_by_coord(X, coord_name, coord_vals=None):
     if coord_vals is None:
         return dim_name
     else:
-        sc = is_scalar(coord_vals)
-        if sc:
-            coord_vals = [coord_vals]
-        mask = [c in coord_vals for c in X[coord_name].values]
-        dim_vals = X[dim_name][mask].data
-        if sc:
-            dim_vals = dim_vals[0]
+        if dim_name == coord_name:
+            dim_vals = coord_vals
+        else:
+            sc = is_scalar(coord_vals)
+            if sc:
+                coord_vals = [coord_vals]
+            ind = np.array([np.argwhere(x == X[coord_name].values)[0][0]
+                            for x in coord_vals])
+            dim_vals = X[dim_name][ind].values
+            #mask = [c in coord_vals for c in X[coord_name].values]
+            #dim_vals = X[dim_name][mask].data
+            if sc:
+                dim_vals = dim_vals[0]
         return (dim_name, dim_vals)
 
 
@@ -228,7 +241,7 @@ def xarray_select_xr(X, coords):
     for coord_name, coord_vals in coords.items():
         dim_name, dim_vals = get_xarrray_dim_by_coord(X, coord_name, coord_vals)
         index[dim_name] = dim_vals
-    return X[index]
+    return X.loc[index]
 
 def xarray_select(X, coords):
     return xarray_select_xr(X, coords).values

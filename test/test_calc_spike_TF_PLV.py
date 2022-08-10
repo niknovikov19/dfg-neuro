@@ -107,7 +107,7 @@ plt.title(f'Spike-field coherence (chan = {n})')
 fpath_in = r"D:\WORK\Camilo\Processing_Pancake_2sess_allchan\dfg_spPLV_(ev=stim1_t)_(wlen=0.500_wover=0.450_fmax=100.0)_tROI=del1_(nchan=all_npl)"
 dfg_spPLV = dfg.DataFileGroup(fpath_in)
 
-entry = dfg_spPLV.get_table_entries_by_coords({'chan_name': 'Pancake_20130923_1_ch126'})
+entry = dfg_spPLV.get_table_entries_by_coords({'chan_name': 'Pancake_20130923_1_ch126'})[0]
 
 X = dfg_spPLV.load_inner_data(entry)
         

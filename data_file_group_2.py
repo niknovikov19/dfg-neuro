@@ -244,7 +244,8 @@ class DataContainerBase:
         for coord_name, coord_val in outer_coord_vals.items():
             mask_cur = (self.outer_table[coord_name] == coord_val)
             mask &= mask_cur
-        return np.where(mask)[0]
+        row_num = np.where(mask)[0]
+        return self.outer_table.index[row_num]
         
 
 # =============================================================================
@@ -643,3 +644,184 @@ inner_coords
 '''
 
 
+def dfg_inner_mean(X, dim_name):
+    X.mean(dim=dim_name)
+    
+
+def dfg_collapse_dim(dfg_in, dim_name, coord_names, proc_info, postfix=None,
+                     dataset_proc=None):
+    """ Collapse along a given dimension.
+    
+    proc_info = [{var_name_old, proc, var_name_new, var_desc_new}]
+    
+    """
+    
+    print('dfg_collapse_dim')
+    
+    # Name of the processing step
+    proc_step_name = 'Collapse along a dimension'
+    
+    # Dictionary of parameters
+    param_names = ['dim_name', 'proc_info', 'dataset_proc']
+    local_vars = locals()
+    params = {par_name: local_vars[par_name] for par_name in param_names}
+    
+    # Name of the dfg's outer table column for the paths to Dataset files
+    data_desc = dfg_in.get_data_desc()
+    fpath_data_column_in = data_desc['fpath_data_column']
+    if postfix is None:
+        fpath_data_column = f'{fpath_data_column_in}_(collapse={dim_name})'
+    else:
+        fpath_data_column = f'{fpath_data_column_in}_{postfix}'
+
+    # Function that converts the parameters dict to the form suitable
+    # for storing into a processing step description
+    def gen_proc_step_params(par):
+        proc_info_out = copy.deepcopy(par['proc_info'])
+        for var_proc_info in proc_info_out:
+            if var_proc_info['proc'] is not None:
+                var_proc_info['proc'] = var_proc_info['proc'].__name__
+        dataset_proc_out = par['dataset_proc']
+        if dataset_proc_out is not None:
+            dataset_proc_out = dataset_proc_out.__name__
+        par_out = {
+            'proc_info': {
+                'desc': 'Procedures to apply to variables',
+                'value': str(proc_info_out)},
+            'dataset_proc': {
+                'desc': 'Procedure to apply to the whole dataset',
+                'value': str(dataset_proc_out)},
+            'dim_name': {
+                'desc': 'Dimension to collapse along',
+                'value': par['dim_name']}
+        }
+        return par_out
+    
+    # Function for converting input to output inner data path
+    def gen_fpath(fpath_in, params):
+        dim_name = params['dim_name']
+        if postfix is None:
+            fpath_data_postfix = f'(collapse={dim_name})'
+        else:
+            fpath_data_postfix = postfix
+        fpath_noext, ext  = os.path.splitext(fpath_in)
+        return fpath_noext + '_' + fpath_data_postfix + ext
+    
+    # Description of the new variables
+    data_desc = dfg_in.get_data_desc()
+    vars_new_descs = {}
+    for v in proc_info:
+        if ((v['var_name_new'] == v['var_name_old']) and
+            (v['var_desc_new'] is None)):
+                v['var_desc_new'] = data_desc['variables'][v['var_name_old']]
+        vars_new_descs[v['var_name_new'] ] = v['var_desc_new']
+    
+    # Description of the new coordinates
+    coords_new_descs = copy.deepcopy(data_desc['inner_coords'])
+    for coord_name in coord_names:
+        coords_new_descs.pop(coord_name)
+    
+    def _inner_proc(X, dim_name, proc_info, dataset_proc):
+        if dataset_proc is not None:
+            return dataset_proc(X, dim_name)
+        else:
+            X_out = {}
+            for v in proc_info:
+                X_var_in = X[v['var_name_old']]
+                if v['proc'] is not None:
+                    var_value = v['proc'](X_var_in, dim_name)
+                else:
+                    var_value = copy.deepcopy(X_var_in)
+                X_out[v['var_name_new']] = var_value
+            return xr.Dataset(X_out)
+    
+    # Call calc_dataset_ROIs() for each inner dataset of the DataFileGroup
+    dfg_out = apply_dfg_inner_proc_mt(
+            dfg_in, _inner_proc, params, proc_step_name,
+            gen_proc_step_params, fpath_data_column, gen_fpath,
+            vars_new_descs, coords_new_descs)
+    
+    return dfg_out
+
+
+def dfg_elementwise_proc(dfg_in, proc_info, postfix, dataset_proc=None):
+    """ Apply an element-wise function.
+    
+    proc_info = [{var_name_old, proc, var_name_new, var_desc_new}]
+    
+    """
+    
+    print('dfg_apply_elementwise_proc')
+    
+    # Name of the processing step
+    proc_step_name = 'Apply an element-wise function'
+    
+    # Dictionary of parameters
+    param_names = ['proc_info', 'dataset_proc']
+    local_vars = locals()
+    params = {par_name: local_vars[par_name] for par_name in param_names}
+    
+    # Name of the dfg's outer table column for the paths to Dataset files
+    data_desc = dfg_in.get_data_desc()
+    fpath_data_column_in = data_desc['fpath_data_column']
+    fpath_data_column = f'{fpath_data_column_in}_{postfix}'
+
+    # Function that converts the parameters dict to the form suitable
+    # for storing into a processing step description
+    def gen_proc_step_params(par):
+        proc_info_out = copy.deepcopy(par['proc_info'])
+        for var_proc_info in proc_info_out:
+            if var_proc_info['proc'] is not None:
+                var_proc_info['proc'] = var_proc_info['proc'].__name__
+        dataset_proc_out = dataset_proc
+        if dataset_proc_out is not None:
+            dataset_proc_out = dataset_proc_out.__name__
+        par_out = {
+            'proc_info': {
+                'desc': 'Procedures to apply to variables',
+                'value': str(proc_info_out)},
+            'dataset_proc': {
+                'desc': 'Procedure to apply to the whole dataset',
+                'value': str(dataset_proc_out)},
+        }
+        return par_out
+    
+    # Function for converting input to output inner data path
+    def gen_fpath(fpath_in, params):
+        fpath_data_postfix = postfix
+        fpath_noext, ext  = os.path.splitext(fpath_in)
+        return fpath_noext + '_' + fpath_data_postfix + ext
+    
+    # Description of the new variables
+    data_desc = dfg_in.get_data_desc()
+    vars_new_descs = {}
+    for v in proc_info:
+        if ((v['var_name_new'] == v['var_name_old']) and
+            (v['var_desc_new'] is None)):
+                v['var_desc_new'] = data_desc['variables'][v['var_name_old']]
+        vars_new_descs[v['var_name_new'] ] = v['var_desc_new']
+    
+    # Description of the new coordinates
+    coords_new_descs = copy.deepcopy(data_desc['inner_coords'])
+    
+    def _inner_proc(X, proc_info, dataset_proc):
+        if dataset_proc is not None:
+            return dataset_proc(X)
+        else:
+            X_out = {}
+            for v in proc_info:
+                X_var_in = X[v['var_name_old']]
+                if v['proc'] is not None:
+                    var_value = v['proc'](X_var_in)
+                else:
+                    var_value = copy.deepcopy(X_var_in)
+                X_out[v['var_name_new']] = var_value
+            return xr.Dataset(X_out)
+    
+    # Call calc_dataset_ROIs() for each inner dataset of the DataFileGroup
+    dfg_out = apply_dfg_inner_proc_mt(
+            dfg_in, _inner_proc, params, proc_step_name,
+            gen_proc_step_params, fpath_data_column, gen_fpath,
+            vars_new_descs, coords_new_descs)
+    
+    return dfg_out

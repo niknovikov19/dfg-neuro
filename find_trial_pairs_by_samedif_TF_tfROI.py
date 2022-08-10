@@ -32,9 +32,10 @@ import spike_TF_PLV as spPLV
 import useful as usf
 
 
-def _dfg_find_trial_pairs_by_samedif_tfpow_inner(X_in, ROIset_same, ROIset_dif,
-                                       Nbins=20, thresh_sameROI=1.5,
-                                       thresh_difROI=1.5):
+def _dfg_find_trial_pairs_by_samedif_tfpow_inner(
+        X_in, ROIset_same, ROIset_dif, Nbins=20,
+        outlier_thresh_sameROI=1.5, outlier_thresh_difROI=1.5,
+        sel_perc_sameROI=1):
     """ Find trial pairs with same / different TF power in two ROIs.
     
     Find trial pairs (for a given channel), such that in each pair
@@ -53,12 +54,25 @@ def _dfg_find_trial_pairs_by_samedif_tfpow_inner(X_in, ROIset_same, ROIset_dif,
     #x_same = x_same.data[0]
     #x_dif = x_dif.data[0]
     
+    # Leave only the trials with x_same in the lower percentile
+    x_same_sorted = np.sort(x_same)
+    n_thresh = int((len(x_same_sorted) - 1) * sel_perc_sameROI)
+    x_thresh = x_same_sorted[n_thresh]
+    mask = (x_same < x_thresh)
+    idx_m = np.argwhere(mask)
+    x_same_m = x_same[mask]
+    x_dif_m = x_dif[mask]
+    Nbins = int(Nbins * sel_perc_sameROI)
+    
+    # Leave only the trials with x_dif falling into upper and lower percentiles
+    #sel_perc_difROI = 0.25
+    
     # Sort trials by 'same' ROI values
-    idx_same_sorted = x_same.argsort()
+    idx_same_sorted = x_same_m.argsort()
     
     trial_idx_loval = np.array([], dtype=np.int64)
     trial_idx_hival = np.array([], dtype=np.int64)
-    N = x_same.size
+    N = x_same_m.size
     
     # Bins by sorted 'same' ROI values
     for n in range(Nbins):
@@ -68,16 +82,19 @@ def _dfg_find_trial_pairs_by_samedif_tfpow_inner(X_in, ROIset_same, ROIset_dif,
         idx_bin = idx_same_sorted[idx2_bin]
         
         # Sort bin trials by 'dif' ROI values
-        x_dif_bin = x_dif[idx_bin]
+        x_dif_bin = x_dif_m[idx_bin]
         idx2_dif_srt_bin = x_dif_bin.argsort()
         idx_dif_srt_bin = idx_bin[idx2_dif_srt_bin]
         
         # Get trial pairs from the bin, sorted by the difference in 'dif' ROI values
         npairs = int(len(idx_bin) / 2)
         idx_bin_loval = idx_dif_srt_bin[0:npairs]
-        idx_bin_hival = idx_dif_srt_bin[-npairs:]
+        idx_bin_hival = np.flip(idx_dif_srt_bin[-npairs:])
         trial_idx_loval = np.append(trial_idx_loval, idx_bin_loval)
         trial_idx_hival = np.append(trial_idx_hival, idx_bin_hival)
+        
+    trial_idx_hival = idx_m[trial_idx_hival]
+    trial_idx_loval = idx_m[trial_idx_loval]
     
     # Check that the groups contain different trials
     #a1 = set(trial_idx_loval)
@@ -85,14 +102,18 @@ def _dfg_find_trial_pairs_by_samedif_tfpow_inner(X_in, ROIset_same, ROIset_dif,
     #a1.intersection(a2)
 
     # ROI value differences for the selected trial pairs
-    diff_sameROI = x_same[trial_idx_hival] - x_same[trial_idx_loval]
-    diff_difROI = x_dif[trial_idx_hival] - x_dif[trial_idx_loval]
+    x_same_hival = x_same[trial_idx_hival]
+    x_same_loval = x_same[trial_idx_loval]
+    x_dif_hival = x_dif[trial_idx_hival]
+    x_dif_loval = x_dif[trial_idx_loval]
+    diff_sameROI = x_same_hival - x_same_loval
+    diff_difROI = x_dif_hival - x_dif_loval
     
     # Find outliers
     mask_same = (np.abs((diff_sameROI - np.mean(diff_sameROI)))
-                 > (thresh_sameROI * np.std(diff_sameROI)))
+                 > (outlier_thresh_sameROI * np.std(diff_sameROI)))
     mask_dif = (np.abs((diff_difROI - np.mean(diff_difROI)))
-                > (thresh_difROI * np.std(diff_difROI)))
+                > (outlier_thresh_difROI * np.std(diff_difROI)))
     
     '''
     plt.figure()
@@ -110,6 +131,23 @@ def _dfg_find_trial_pairs_by_samedif_tfpow_inner(X_in, ROIset_same, ROIset_dif,
     trial_idx_hival = trial_idx_hival[mask]
     diff_sameROI = diff_sameROI[mask]
     diff_difROI = diff_difROI[mask]
+    x_same_hival = x_same_hival[mask]
+    x_same_loval = x_same_loval[mask]
+    x_dif_hival = x_dif_hival[mask]
+    x_dif_loval = x_dif_loval[mask]
+    
+# =============================================================================
+#     plt.figure()
+#     Npts = len(x_same_hival)
+#     for n in range(Npts):
+#         plt.plot([x_same_loval[n], x_same_hival[n]],
+#                  [x_dif_loval[n], x_dif_hival[n]], '.-')
+#     xmax = np.max(x_dif_hival)
+#     plt.plot([0, xmax], [0, xmax], 'k')
+#     plt.xlabel('del12 (low diff)')
+#     plt.ylabel('del11 (high diff)')
+#     #plt.legend()
+# =============================================================================
     
     # TODO: p-values
     
@@ -135,9 +173,10 @@ def _dfg_find_trial_pairs_by_samedif_tfpow_inner(X_in, ROIset_same, ROIset_dif,
     return X_out
 
 
-def dfg_find_trial_pairs_by_samedif_tfpow(dfg_in, ROIset_same, ROIset_dif,
-                                       Nbins=20, thresh_sameROI=1.5,
-                                       thresh_difROI=1.5):
+def dfg_find_trial_pairs_by_samedif_tfpow(
+        dfg_in, ROIset_same, ROIset_dif, Nbins=20, 
+        outlier_thresh_sameROI=1.5, outlier_thresh_difROI=1.5,
+        sel_perc_sameROI=1):
     """ Find trial pairs with same / different TF power in two ROIs.
     
     Find trial pairs (for all channels), such that in each pair
@@ -151,7 +190,8 @@ def dfg_find_trial_pairs_by_samedif_tfpow(dfg_in, ROIset_same, ROIset_dif,
     
     # Dictionary of parameters
     param_names = ['ROIset_same', 'ROIset_dif', 'Nbins',
-                   'thresh_sameROI', 'thresh_difROI']
+                   'outlier_thresh_sameROI', 'outlier_thresh_difROI',
+                   'sel_perc_sameROI']
     local_vars = locals()
     params = {par_name: local_vars[par_name] for par_name in param_names}
     
@@ -171,18 +211,22 @@ def dfg_find_trial_pairs_by_samedif_tfpow(dfg_in, ROIset_same, ROIset_dif,
             'Nbins': {
                 'desc': 'Number of bins to separate trial values of ROIset_same ROI',
                 'value': str(Nbins)},            
-            'thresh_sameROI': {
+            'outlier_thresh_sameROI': {
                 'desc': 'Outlier threshold for ROIset_same values',
-                'value': str(thresh_sameROI)},
-            'thresh_difROI': {
+                'value': str(outlier_thresh_sameROI)},
+            'outlier_thresh_difROI': {
                 'desc': 'Outlier threshold for ROIset_dif values',
-                'value': str(thresh_difROI)}
+                'value': str(outlier_thresh_difROI)},
+            'sel_perc_sameROI': {
+                'desc': 'Relative upper threshold by ROIset_same',
+                'value': str(sel_perc_sameROI)}
         }
         return par_out
     
     # Function for converting input to output inner data path
     def gen_fpath(fpath_in, params):
-        fpath_data_postfix = 'trial_pairs'
+        _sel_perc_sameROI = params['sel_perc_sameROI']
+        fpath_data_postfix = f'trial_pairs_(perc_sameROI={_sel_perc_sameROI}r)'
         fpath_noext, ext  = os.path.splitext(fpath_in)
         return fpath_noext + '_' + fpath_data_postfix + ext
     

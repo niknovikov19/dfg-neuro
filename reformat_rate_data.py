@@ -77,7 +77,7 @@ proc_steps = {
             
 fpath_dfg_in = (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan'
                 '\cell_epoched_info_(ev=stim1_t)_(t=-1.00-3.00)_rvec_(t=500-1200_dt=10)')
-fpath_dfg_out =  (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan'
+fpath_dfg_out = (r'D:\WORK\Camilo\Processing_Pancake_2sess_allchan'
                 '\dfg_rvec_(ev=stim1_t)_(t=-1.00-3.00)_(t=500-1200_dt=10)')
 
 dfg = DataFileGroup()

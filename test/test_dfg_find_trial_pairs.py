@@ -31,35 +31,38 @@ fpath_TFpow = os.path.join(dirpath_proc, fname_TFpow)
 dfg_TFpow = dfg.DataFileGroup(fpath_TFpow)
 dfg_TFpow.change_root('H:', 'D:')
 
-X = dfg_TFpow.load_inner_data(1)
+X = dfg_TFpow.load_inner_data(0)
 
 ROIset_same = {'fROI_name': 'beta', 'tROI_name': 'del12'}
 ROIset_dif = {'fROI_name': 'beta', 'tROI_name': 'del11'}
-Y = _dfg_find_trial_pairs_by_samedif_tfpow_inner(X, ROIset_same, ROIset_dif)
+Y = _dfg_find_trial_pairs_by_samedif_tfpow_inner(X, ROIset_same, ROIset_dif,
+                                                 sel_perc_sameROI=0.5)
 
-
-fname_dfg = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_trial_pairs'
-fpath_dfg = os.path.join(dirpath_proc, fname_dfg)
-
-dfg_trpairs = dfg.DataFileGroup(fpath_dfg)
-
-for entry in dfg_trpairs.get_table_entries():
-    
-    X = dfg_trpairs.load_inner_data(entry)
-    print(entry)
-
-    plt.figure(100)
-    plt.clf()
-    x = X.diff_sameROI.data
-    y = X.diff_difROI.data
-    plt.plot(x, y, '.')
-    plt.xlabel(str(ROIset_same))
-    plt.ylabel(str(ROIset_dif))
-    plt.title(f'TF power difference in trial pairs (entry = {entry})')
-    plt.draw()
-    plt.ylim((0, max(y)))
-    plt.xlim((-1e-6, 1e-6))
-    if not plt.waitforbuttonpress():
-        break
+# =============================================================================
+# 
+# fname_dfg = 'dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_trial_pairs'
+# fpath_dfg = os.path.join(dirpath_proc, fname_dfg)
+# 
+# dfg_trpairs = dfg.DataFileGroup(fpath_dfg)
+# 
+# for entry in dfg_trpairs.get_table_entries():
+#     
+#     X = dfg_trpairs.load_inner_data(entry)
+#     print(entry)
+# 
+#     plt.figure(100)
+#     plt.clf()
+#     x = X.diff_sameROI.data
+#     y = X.diff_difROI.data
+#     plt.plot(x, y, '.')
+#     plt.xlabel(str(ROIset_same))
+#     plt.ylabel(str(ROIset_dif))
+#     plt.title(f'TF power difference in trial pairs (entry = {entry})')
+#     plt.draw()
+#     plt.ylim((0, max(y)))
+#     plt.xlim((-1e-6, 1e-6))
+#     if not plt.waitforbuttonpress():
+#         break
+# =============================================================================
 
 

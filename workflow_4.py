@@ -23,8 +23,8 @@ import vis
 
 
 # Root paths for the data and the processing results
-dirpath_data_root = 'H:\\WORK\\Camilo\\data'
-dirpath_res_root = 'H:\\WORK\\Camilo\\Processing_Pancake_1chan'
+dirpath_data_root = 'D:\\WORK\\Camilo\\data'
+dirpath_res_root = 'D:\\WORK\\Camilo\\Processing_Pancake_1chan'
 
 #os.mkdir(dirpath_res_root)
 
@@ -74,7 +74,7 @@ chan_info = chan_info[chan_info.chan_name==chan_name]
 
 
 lock_ev = 'stim1_t'
-time_win = [-1,3]
+time_win = [-1, 3]
 
 # Epoch LFPs
 fname_out_LFP_ep = ('chan_all_epoched_info_(ev=%s)_(t=%.02f-%.02f)' % 

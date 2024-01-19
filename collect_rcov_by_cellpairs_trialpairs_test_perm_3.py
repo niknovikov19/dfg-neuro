@@ -59,18 +59,23 @@ with open(fpath_cell_epoched_info, 'rb') as fid:
     
 #### Parameters
 params = {}
-#params['cell_pairs_type'] = 'high_rcov' # Use cell pairs with high rate cov. (trial-avg)
-params['cell_pairs_type'] = 'high_sel_cov' # Use cell pairs with similar selectivity 
+params['cell_pairs_type'] = 'high_rcov' # Use cell pairs with high rate cov. (trial-avg)
+#params['cell_pairs_type'] = 'high_sel_cov' # Use cell pairs with similar selectivity 
 params['all_chan_test'] = False    # Perform analysis with TFpow taken from each channel
 params['chan_sel_type'] = 'cell_rec_chan' # TFpow taken from one of the two channels,
                                           # at which the cells of a pair were recorded
 params['plot_cell_pair_test'] = False  # Plot statistics (over trials) for each cell pair
-params['lag_range'] = (-0.01, 0.01)
+params['lag_range'] = (-0.02, 0.02)
 params['lag_ROI_type'] = 'symm'
 #params['lag_ROI_type'] = 'antisymm_abs'
 
-rcov_threh = 0.5
-sel_thresh = 0
+# Number of permutations
+Nperm = 1000
+
+# Params of the cell pair selection
+rcov_threh = 0.01       # High rate cov. (cell_pairs_type == high_rcov)
+sel_thresh = 1.5     # High selectivity cov. (cell_pairs_type == high_sel_cov)
+
 difROI_thresh = 0
 
 sess_idx_uni = np.unique(cell_epoched_info.sess_id)
@@ -85,6 +90,7 @@ for sess_id in sess_idx_uni:
 def calc_lag_ROI_symm(X, lag_range):
     lags_used = X.lags.values
     mask = (lags_used >= lag_range[0]) & (lags_used <= lag_range[1])
+    mask = mask & (lags_used != 0)
     lags_used = lags_used[mask]
     lagROI = {'lags': lags_used}
     X_lagROI = usf.xarray_select_xr(X, lagROI)
@@ -103,7 +109,8 @@ def calc_lag_ROI_antisymm_abs(X, lag_range):
     X_lagROI_left = X_lagROI_left.sum(dim='sample_num', skipna=True)
     X_lagROI_right = usf.xarray_select_xr(X, lagROI_right)
     X_lagROI_right = X_lagROI_right.sum(dim='sample_num', skipna=True)
-    X_lagROI = np.abs(X_lagROI_right - X_lagROI_left)
+    #X_lagROI = np.abs(X_lagROI_right - X_lagROI_left)
+    X_lagROI = X_lagROI_right - X_lagROI_left
     return X_lagROI
 
 def calc_lag_ROI(X, lag_range, ROI_type):
@@ -181,7 +188,7 @@ def make_pairs(N):
             pairs.append((n1, n2))
     return pairs
 
-# Produce a list of cell pairs with high rcov
+# Produce a list of cell pairs
 for sess_id in sess_idx_uni:
     
     # Get cell pairs with high rate covariance or high selectivity similarity
@@ -363,10 +370,14 @@ for sess_id in sess_idx_uni:
     exp['P'] = E.copy()     # p-values
     exp['T'] = E.copy()     # t-scores
     exp['D'] = E.copy()     # differences
+    exp['Tperm'] = np.nan * np.ones((Npairs, Nperm))
+    exp['chan'] = {}
     
     for pair_num, cell_pair in enumerate(cell_pairs):
 
         cell1_name, cell2_name = cell_pair
+        
+        print(f'{pair_num} / {len(cell_pairs)}  {cell1_name} - {cell2_name}')
 
         if params['chan_sel_type'] == 'cell_rec_chan':
             # TFpow is taken from the same channel as one of the cells in a pair
@@ -435,6 +446,22 @@ for sess_id in sess_idx_uni:
         t, p = stat.ttest_rel(x_low, x_high, nan_policy='omit')  
         exp['T'][pair_num] = t
         exp['P'][pair_num] = p
+        exp['chan'][pair_num] = chan_name_used
+        
+        for n in range(Nperm):
+            # Shuffle between x_low and x_high
+            mask = np.random.randint(2, size=len(x_low), dtype=np.bool)
+            x_low_perm = x_low.copy()
+            x_high_perm = x_high.copy()
+            x_low_perm[mask] = x_high[mask]
+            x_high_perm[mask] = x_low[mask]
+            # T-test on the shuffled data
+            tperm, _ = stat.ttest_rel(x_low_perm, x_high_perm,
+                                      nan_policy='omit') 
+            exp['Tperm'][pair_num, n] = tperm
+            
+        # P-value from permutations
+        pperm = np.mean(np.abs(t) <= exp['Tperm'][pair_num, :]) * 2
         
         # Difference between covariance values averaged over two groups
         exp['D'][pair_num] = np.nanmean(x_high - x_low)
@@ -446,28 +473,130 @@ for sess_id in sess_idx_uni:
             plt.plot(1 * E, x_low, '.')
             plt.plot(2 * E, x_high, '.')
             plt.legend('Low TFpow', 'High TFpow')
-            plt.title(f'{cell1_name} - {cell2_name} (p = {p})')
+            plt.title(f'{cell1_name} - {cell2_name} (p = {p:.03f} | {pperm:.03f})')
             plt.ylabel('Rate covariance')
             plt.xlim((0.5, 2.5))
             plt.draw()
             plt.waitforbuttonpress()
-    
+            
     sess_data[sess_id]['exp2_data'] = exp
     
+    break    # Work only with the first session
+    
+# =============================================================================
+# 
+# d_vec = np.array([], np.float64)
+# for sess_id in sess_idx_uni:
+#     d_vec = np.concatenate((d_vec, sess_data[sess_id]['exp2_data']['D']))
+# #d_vec[np.nanargmax(d_vec)] = np.nan
+# #d_vec[np.nanargmin(d_vec)] = np.nan
+# #d_vec[np.nanargmin(d_vec)] = np.nan
+# z_vec = np.zeros((len(d_vec)))
+# t, p = stat.ttest_rel(d_vec, z_vec, nan_policy='omit')  
+# 
+# plt.figure()
+# plt.plot(z_vec, d_vec, '.')
+# plt.plot([-1, 1], [0, 0], 'k')
+# plt.ylabel('Cell pair')
+# plt.title(f'rcov (High TFpow - Low TFpow trials), p = {p}')
+# =============================================================================
 
-d_vec = np.array([], np.float64)
-for sess_id in sess_idx_uni:
-    d_vec = np.concatenate((d_vec, sess_data[sess_id]['exp2_data']['D']))
-#d_vec[np.nanargmax(d_vec)] = np.nan
-#d_vec[np.nanargmin(d_vec)] = np.nan
-#d_vec[np.nanargmin(d_vec)] = np.nan
-z_vec = np.zeros((len(d_vec)))
-t, p = stat.ttest_rel(d_vec, z_vec, nan_policy='omit')  
+#exp = sess_data[sess_id]['exp2_data']
+Tperm = exp['Tperm']
+T = exp['T']
+
+N = len(T)
+Pmax = -np.ones((N), dtype=np.float64)
+Pmin = -np.ones((N), dtype=np.float64)
+Tmax = np.max(Tperm, axis=0)
+Tmin = np.min(Tperm, axis=0)
+for n, t in enumerate(T):
+    Pmax[n] = np.mean(t <= Tmax)
+    Pmin[n] = np.mean(t >= Tmin)
+print(f'Pmin = {min(Pmin)}')
+print(f'Pmax = {min(Pmax)}')
+
+Tlim = 5
+hbins = np.linspace(-Tlim, Tlim, 50)
+hmax, hbins = np.histogram(Tmax, bins=hbins)
+hmin, hbins = np.histogram(Tmin, bins=hbins)
+hmax = hmax / np.sum(hmax)
+hmin = hmin / np.sum(hmin)
+h0 = np.max(hmax)
+tmax = np.max(T)
+tmin = np.min(T)
+plt.figure()
+plt.plot(hbins[1:], hmax, 'b')
+plt.plot([tmax, tmax], [0, h0], 'b')
+plt.plot(hbins[1:], hmin, 'r')
+plt.plot([tmin, tmin], [0, h0], 'r')
+# =============================================================================
+# Tsort = np.sort(T)
+# Tvis = [Tsort[n] for n in [0, 1, -2, -1]]
+# for t in Tvis:
+#     plt.plot([t, t], [0, h0], 'r')
+# =============================================================================
+plt.xlabel('T-score')
+
+
+idx = np.argsort(T)
+n = idx[-1]
+cell1_name, cell2_name = cell_pairs[n]
+chan_name = exp['chan'][n]
+print(f'{cell1_name} - {cell2_name}  p = {Pmax[n]}')
+
+
+# Load rate covariance data for a given session
+rcov_entry = dfg_rcov.get_table_entries_by_coords(
+    {'sess_id': sess_id})[0]
+rcov_data = dfg_rcov.load_inner_data(rcov_entry)
+rcov = rcov_data.rcov
+
+# Load trial pairs and TFpow difference
+#chan_name = 'Pancake_20130923_1_ch40'
+chan_index = dfg_trial_pairs_sess.get_table_entries_by_coords(
+    {'chan_name': chan_name})[0]
+X = dfg_trial_pairs_sess.load_inner_data(chan_index)
+
+# Low- and high-TFpow trials for the selected channel
+trial_idx_loval = X.trial_id_loval
+trial_idx_hival = X.trial_id_hival
+
+# Select trial pairs with large difference in difROI
+perc = difROI_thresh
+diff_difROI_vec = X.diff_difROI
+diff_thresh = np.percentile(diff_difROI_vec, perc)
+mask = (diff_difROI_vec > diff_thresh)
+diff_difROI_vec = diff_difROI_vec[mask]
+trial_idx_loval = trial_idx_loval[mask].values
+trial_idx_hival = trial_idx_hival[mask].values
+
+# Select rate covariance data for a given cell pair
+ind = {'cell1_name': cell1_name, 'cell2_name': cell2_name}
+rcov_cellpair = usf.xarray_select_xr(rcov, ind)
+
+# Get rate covariance vectors for low- and high-TFpow trials
+trial_idx_loval_sel = {'trial_num': trial_idx_loval}
+trial_idx_hival_sel = {'trial_num': trial_idx_hival}
+rcov_low_TFpow = usf.xarray_select_xr(rcov_cellpair, trial_idx_loval_sel)
+rcov_high_TFpow = usf.xarray_select_xr(rcov_cellpair, trial_idx_hival_sel)
+x_low = rcov_low_TFpow.values
+x_high = rcov_high_TFpow.values
+
+# Average rcov vectors over trials
+x_low_avg = np.nanmean(x_low, axis=1)
+x_high_avg = np.nanmean(x_high, axis=1)
 
 plt.figure()
-plt.plot(z_vec, d_vec, '.')
-plt.plot([-1, 1], [0, 0], 'k')
-plt.ylabel('Cell pair')
-plt.title(f'rcov (High TFpow - Low TFpow trials), p = {p}')
-    
-    
+lags = rcov.lags.values
+plt.plot(lags, x_low_avg)
+plt.plot(lags, x_high_avg)
+plt.plot(lags, x_high_avg - x_low_avg)
+plt.plot([lags[0], lags[-1]], [0, 0], 'k--')
+plt.xlim(params['lag_range'])
+plt.xlabel('Lag')
+plt.ylabel('Rate covariance')
+plt.title(f'{cell1_name} - {cell2_name} ({chan_name})')
+plt.legend(['Low-TFpow trials', 'High-TFpow trials', 'High - Low'])
+
+

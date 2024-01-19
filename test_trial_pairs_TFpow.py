@@ -43,7 +43,7 @@ dirpath_proc = os.path.join(dirpath_root, 'Processing_Pancake_2sess_allchan')
 
 # Data on and low-high-power trial pairs
 fname_trial_pairs = ('dfg_TFpow_noERP_(ev=stim1_t)_(t=-1.00-3.00)_(TF_0.5_0.4_100)_'
-                     'trial_pairs2_(perc_sameROI=0.5r)')
+                     'trial_pairs2_(perc_sameROI=0.5)')
 dfg_trial_pairs = dfg.DataFileGroup(os.path.join(dirpath_proc, fname_trial_pairs))
 
 # Time-frequency power

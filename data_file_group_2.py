@@ -5,6 +5,7 @@ import copy
 #import importlib
 #import itertools
 import os
+from pprint import pprint
 import re
 import sys
 
@@ -33,6 +34,11 @@ class DataProcTree:
         self.proc_steps = {}
         self.branch_id = '(1)'
         self.proc_steps[self.branch_id] = {}
+        
+    def __str__(self):
+        return str(self.proc_steps)
+    def __repr__(self):
+        return repr(self.proc_steps)
     
     def _get_last_step_num(self):
         step_nums = [int(s) for s in self.proc_steps[self.branch_id].keys()]
@@ -240,12 +246,18 @@ class DataContainerBase:
             self.outer_table.at[entry, fpath_col_name] = fpath_new
             
     def get_table_entries_by_coords(self, outer_coord_vals):
-        mask = np.ones((len(self.outer_table)), dtype=np.bool)        
+        mask = np.ones((len(self.outer_table)), dtype=bool)        
         for coord_name, coord_val in outer_coord_vals.items():
             mask_cur = (self.outer_table[coord_name] == coord_val)
             mask &= mask_cur
         row_num = np.where(mask)[0]
         return self.outer_table.index[row_num]
+    
+    def get_table_entry_by_coords(self, outer_coord_vals):
+        return self.get_table_entries_by_coords(outer_coord_vals)[0]
+    
+    def print_proc_tree(self):
+        pprint(self.data_proc_tree.proc_steps)
         
 
 # =============================================================================

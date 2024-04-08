@@ -27,53 +27,53 @@ import roi_utils as roi
 import useful as usf
 
 
-def _calc_dfg_TF_inner(X_in, win_len=0.5, win_overlap=0.45, fmax=100):
-
+def _calc_dfg_TF_inner(X_in, win_len=0.5, win_overlap=0.45, fmax=100,
+                       fs=None, var_name='LFP'):
     # Sampling rate
-    fs = X_in.attrs['proc_steps.(1).0.params.fs.value']
+    if fs is None:
+        fs = X_in.attrs['proc_steps.(1).0.params.fs.value']
     
-    X_in = X_in.LFP
+    # Select the variable to apply TF transform
+    X_in = X_in[var_name]
 
     # Window and overlap in samples
     win_len_samp = round(win_len * fs)
     win_overlap_samp = round(win_overlap * fs)
     
-    Ntrials = X_in.trial_num.size
-    W = None
+    # Axis corresponding to the time dimension of X_in
+    time_dim_name = X_in.coords['time'].dims[0]    # time or sample
+    time_dim_axis_in = X_in.dims.index(time_dim_name)
+    
+    # Time-frequency transform
+    # In W_, the time dim. of X_in will be replaced by freq dim.,
+    # and time dim. will be added as the last one
+    (ff, tt, W_) = sig.spectrogram(
+        X_in.values, fs, mode='complex', axis=time_dim_axis_in,
+        window=sig.windows.hamming(win_len_samp),
+        noverlap=win_overlap_samp)
+    
+    # Shift positions of W_ time bins to the closest X_in time bins
+    idx = np.round(tt * fs).astype(int)
+    tt = X_in.time.data[idx]
+    
+    # (..., time, ...) -> (..., freq, ..., time)
+    dims = list(X_in.dims) + ['time']
+    dims[time_dim_axis_in] = 'freq'
+    
+    # Remove old coords associated with the time dimension
+    # and add new 'time' and 'freq' coords
+    coords = usf.get_xarray_coords_dict(X_in)
+    coords = {name: coord for name, coord in coords.items()
+              if coord[0] != time_dim_name}
+    coords['time'] = ('time', tt)
+    coords['freq'] = ('freq', ff)
+    
+    # Associate a DataArray object with W_
+    W = xr.DataArray(W_, coords=coords, dims=dims)
 
-    for m in range(Ntrials):
-
-        x = X_in.isel(trial_num=m)
-        
-        # TF of the current channel + trial
-        (ff, tt, Wcur) = sig.spectrogram(
-            x, fs, mode='complex', window=sig.windows.hamming(win_len_samp),
-            noverlap=win_overlap_samp)
-        
-        idx = np.round(tt * fs).astype(int)
-        tt = X_in.time.data[idx]
-        
-        # Frequencies of interest
-        idx = (ff < fmax)
-        ff = ff[idx]
-        Wcur = Wcur[idx,:]
-        
-        # Allocate output
-        if W is None:            
-            coords = {
-                'freq': ff,
-                'time': tt,
-                'trial_num': X_in.trial_num,
-                'trial_id': ('trial_num', X_in.trial_id)
-                }
-            Wnan = np.nan * np.ones((len(ff), len(tt), Ntrials),
-                                    dtype='complex128')
-            W = xr.DataArray(Wnan, coords=coords,
-                             dims=['freq', 'time', 'trial_num'])
-            
-        # Store TF of the current trial
-        W[:,:,m] = Wcur
-        
+    # Leave only the frequencies of interest
+    W = W.sel(freq=slice(0, fmax))
+    
     # Collect the output dataset
     data_vars = {'TF': W}
     X_out = xr.Dataset(data_vars)
@@ -81,10 +81,8 @@ def _calc_dfg_TF_inner(X_in, win_len=0.5, win_overlap=0.45, fmax=100):
 
 
 def calc_dfg_TF(dfg_in, win_len=0.5, win_overlap=0.45, fmax=100,
-                need_recalc=True):
-    """ Time-frequency transform of epoched LFP data.
-
-    """
+                var_name='LFP', need_recalc=True):
+    """ Time-frequency transform of epoched LFP data."""
     
     print('calc_dfg_TF')
     
@@ -92,7 +90,7 @@ def calc_dfg_TF(dfg_in, win_len=0.5, win_overlap=0.45, fmax=100,
     proc_step_name = 'Time-frequency transform'
     
     # Dictionary of parameters
-    param_names = ['win_len', 'win_overlap', 'fmax']
+    param_names = ['win_len', 'win_overlap', 'fmax', 'var_name']
     local_vars = locals()
     params = {par_name: local_vars[par_name] for par_name in param_names}
     
@@ -118,6 +116,7 @@ def calc_dfg_TF(dfg_in, win_len=0.5, win_overlap=0.45, fmax=100,
     # Function for converting input to output inner data path
     def gen_fpath(fpath_in, params):
         fpath_data_postfix = (
+            'TF_'
             f'(wlen={params["win_len"]}_'
             f'wover={params["win_overlap"]}_'
             f'fmax={params["fmax"]})')
@@ -136,9 +135,11 @@ def calc_dfg_TF(dfg_in, win_len=0.5, win_overlap=0.45, fmax=100,
     }
     
     # Call calc_dataset_ROIs() for each inner dataset of the DataFileGroup
-    dfg_out = dfg.apply_dfg_inner_proc_mt(
+    dfg_out = dfg.apply_dfg_inner_proc(
             dfg_in, _calc_dfg_TF_inner, params, proc_step_name,
             gen_proc_step_params, fpath_data_column, gen_fpath,
-            vars_new_descs, coords_new_descs, need_recalc)
+            vars_new_descs, coords_new_descs,
+            #need_recalc
+            )
     
     return dfg_out

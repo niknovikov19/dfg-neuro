@@ -234,6 +234,9 @@ def get_xarrray_dim_by_coord(X, coord_name, coord_vals=None):
             if sc:
                 dim_vals = dim_vals[0]
         return (dim_name, dim_vals)
+    
+def get_xarray_coords_dict(X):
+    return {name: (c.dims[0], c.values) for name, c in X.coords.items()}
 
 
 def xarray_select_xr(X, coords):
@@ -328,7 +331,3 @@ def copy_files(fpath_list, dirpath_base_old, dirpath_base_new):
         shutil.copy(fpath_in, fpath_out)
         pbar.update()
     pbar.close()
-        
-    
-    
-    

@@ -34,18 +34,19 @@ fpath_dfg_lfp = os.path.join(dirpath_proc, fname_dfg_lfp)
 dfg_in = dfg.DataFileGroup(fpath_dfg_lfp)
 
 # Number of sessions to work with
-#nsess_used = 1
-#dfg_in.outer_table = dfg_in.outer_table[:nsess_used]
+nsess_used = 1
+dfg_in.outer_table = dfg_in.outer_table[:nsess_used]
 
 # Calculate TF
 win_len = 0.25
-win_overlap = 0.25 * 0.9
+win_overlap = 0.225
 fmax = 100
 dfg_tf = TF.calc_dfg_TF(dfg_in, win_len, win_overlap, fmax,
-                        need_recalc=False)
+                        need_recalc=True)
 
 # Save the result
-fname_out = ('dfg_TF.pkl')
+fname_out = ('dfg_TF_test.pkl')
+#fname_out = ('dfg_TF.pkl')
 fpath_out = os.path.join(dirpath_proc, fname_out)
 dfg_tf.save(fpath_out)
 
@@ -61,13 +62,22 @@ X = dfg_tf.load_inner_data(0)
 # plt.plot(X.freq, v)
 # plt.xlabel('Frequency')
 # plt.title('Mean phase change')
-# 
-# S = np.mean(np.abs(X.TF), axis=2)
-# 
-# plt.figure()
-# ext = (X.time[0], X.time[-1], X.freq[0], X.freq[-1])
-# plt.imshow(S, extent=ext, aspect='auto', origin='lower')
-# plt.xlabel('Time')
-# plt.ylabel('Frequency')
 # =============================================================================
+
+S = (np.abs(X.TF.sel(chan=130))**2).mean(dim='trial')
+
+plt.figure()
+ext = (X.time[0], X.time[-1], X.freq[0], X.freq[-1])
+plt.imshow(S, extent=ext, aspect='auto', origin='lower')
+plt.xlabel('Time')
+plt.ylabel('Frequency')
+
+Sbl = S.sel(time=slice(-2, -0.5)).mean(dim='time')
+ERSP = (S - Sbl) / Sbl
+plt.figure()
+plt.imshow(ERSP, extent=ext, aspect='auto', origin='lower', vmin=-1.5, vmax=2)
+plt.xlabel('Time')
+plt.ylabel('Frequency')
+plt.xlim(-0.2, 1.2)
+plt.colorbar()
 

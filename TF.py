@@ -135,11 +135,10 @@ def calc_dfg_TF(dfg_in, win_len=0.5, win_overlap=0.45, fmax=100,
     }
     
     # Call calc_dataset_ROIs() for each inner dataset of the DataFileGroup
-    dfg_out = dfg.apply_dfg_inner_proc(
+    dfg_out = dfg.apply_dfg_inner_proc_mt(
             dfg_in, _calc_dfg_TF_inner, params, proc_step_name,
             gen_proc_step_params, fpath_data_column, gen_fpath,
-            vars_new_descs, coords_new_descs,
-            #need_recalc
+            vars_new_descs, coords_new_descs, need_recalc
             )
     
     return dfg_out

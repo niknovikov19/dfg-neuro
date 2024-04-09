@@ -502,12 +502,13 @@ def apply_dfg_inner_proc_mt(dfg_in: DataFileGroup,
     #pbar = tqdm(total=dfg_in.get_num_table_entries())
     
     # Process the first entry to get info required for initializing the output
-    fpath_in = dfg_in.get_inner_data_path(0)
+    ind0 = dfg_in.outer_table.index[0]
+    fpath_in = dfg_in.get_inner_data_path(ind0)
     fpath_out = gen_fpath(fpath_in, params)
     if os.path.exists(fpath_out) and not need_recalc:
         X_out_0 = DataFileGroup.load_inner_data_by_path(fpath_out)
     else:
-        X_in = dfg_in.load_inner_data(0)
+        X_in = dfg_in.load_inner_data(ind0)
         X_out_0 = inner_proc(X_in, **params)
     
     # Initialize the output:
@@ -568,6 +569,65 @@ def apply_dfg_inner_proc_mt(dfg_in: DataFileGroup,
 
     #pbar.close()
     
+    return dfg_out
+
+
+def gen_pathstr_val(x):
+    if isinstance(x, dict):
+        raise ValueError('Cannot add dict to filename')
+    elif isinstance(x, (list, tuple, np.ndarray)):
+        return f'{x[0]}_{x[-1]}'
+    else:
+        return str(x)
+
+def apply_dfg_inner_proc_mt_2(dfg_in: DataFileGroup, inner_proc, 
+                       proc_step_desc: tuple, params: dict, need_recalc=True,
+                       vars_new_descs=None, coords_new_descs=None,
+                       proc_step_name=None, fpath_data_column=None,
+                       fpath_prefix=None, gen_fpath_proc=None):
+    
+    # Name of the processing step
+    if isinstance(proc_step_desc, str):
+        proc_step_desc = (proc_step_desc, proc_step_desc)
+    proc_step_name_short = proc_step_desc[0]
+    proc_step_name_full = proc_step_desc[1]
+    
+    # Name of the dfg's outer table column for the paths to Dataset files
+    if fpath_data_column is None:
+        fpath_data_column = 'fpath_' + proc_step_name_short
+    
+    # Dictionary of parameters
+    params2 = {name: par['val'] for name, par in params.items()}
+    
+    # Function for converting params into the formst of apply_dfg_inner_proc()
+    def gen_proc_step_params(params2_):
+        par_out = {}
+        for name, par in params.items():
+            par_out[name] = {
+                'desc': par['desc'],
+                'value': params2_[name]
+                }
+        return par_out
+    
+    # Function for converting input to output inner data path
+    def gen_fpath_(fpath_in, params2_):
+        fpath_noext, ext = os.path.splitext(fpath_in)
+        fpath = fpath_noext + '_' + proc_step_name_short + '_('
+        for name, par in params.items():
+            if par['short'] is not None:
+                fpath += (par['short'] + '=' + gen_pathstr_val(params2_[name]) + '_')
+        if fpath.endswith('_'):
+            fpath = fpath[:-1]
+        return fpath + ')' + ext
+    if gen_fpath_proc is None:
+        gen_fpath_proc = gen_fpath_
+        
+    dfg_out = apply_dfg_inner_proc_mt(
+            dfg_in, inner_proc, params2, proc_step_name_full,
+            gen_proc_step_params, fpath_data_column, gen_fpath_proc,
+            vars_new_descs, coords_new_descs,
+            need_recalc
+            )
     return dfg_out
 
 

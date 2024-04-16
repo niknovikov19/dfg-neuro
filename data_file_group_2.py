@@ -372,10 +372,13 @@ class DataFileGroup(DataContainerBase):
         column_name = self.get_fpath_data_column_name()
         self.outer_table.at[table_entry, column_name] = fpath_out
         if save_inner:
-            encoding = {
-                var: {'chunksizes': tuple([chunk[0] for chunk in X[var].chunks])}
-                for var in X.data_vars
-            }
+            if list(X.values())[0].chunks is None:
+                encoding = None  # not a dask array
+            else:
+                encoding = {
+                    var: {'chunksizes': tuple([chunk[0] for chunk in X[var].chunks])}
+                    for var in X.data_vars
+                }
             X.to_netcdf(fpath_out, engine='h5netcdf', invalid_netcdf=True,
                         encoding=encoding)
     
@@ -581,7 +584,7 @@ def apply_dfg_inner_proc(dfg_in: DataFileGroup,
 
     def thread_proc(entry):
         
-        print(f'Entry: {entry}')
+        #print(f'Entry: {entry}')
         
         # Save new dataset and store the path into outer_table
         fpath_in = dfg_in.get_inner_data_path(entry)
@@ -665,13 +668,14 @@ def apply_dfg_inner_proc_2(dfg_in: DataFileGroup, inner_proc,
     # Function for converting input to output inner data path
     def gen_fpath_(fpath_in, params2_):
         fpath_noext, ext = os.path.splitext(fpath_in)
-        fpath = fpath_noext + '_' + proc_step_name_short + '_('
-        for name, par in params.items():
-            if par['short'] is not None:
+        fpath = fpath_noext + '_' + proc_step_name_short
+        params_used = [par for par in params.values() if par['short'] is not None]
+        if len(params_used):
+            fpath += '_('
+            for name, par in params_used.items():
                 fpath += (par['short'] + '=' + gen_pathstr_val(params2_[name]) + '_')
-        if fpath.endswith('_'):
-            fpath = fpath[:-1]
-        return fpath + ')' + ext
+            fpath = fpath[:-1] + ')'        
+        return fpath + ext
     if gen_fpath_proc is None:
         gen_fpath_proc = gen_fpath_
         

@@ -29,9 +29,7 @@ import TF
 dirpath_proc = Path('E:/M1_exp/Proc')
 
 # Load epoched LFP data
-fname_dfg_lfp = 'dfg_lfp_epoched.pkl'
-fpath_dfg_lfp = os.path.join(dirpath_proc, fname_dfg_lfp)
-dfg_in = dfg.DataFileGroup(fpath_dfg_lfp)
+dfg_in = dfg.DataFileGroup(dirpath_proc / 'dfg_lfp_epoched.pkl')
 
 # Number of sessions to work with
 nsess_used = 1
@@ -40,12 +38,12 @@ dfg_in.outer_table = dfg_in.outer_table[:nsess_used]
 # Calculate TF
 win_len = 0.25
 win_overlap = 0.225
-fmax = 100
+fmax = 200
 dfg_tf = TF.calc_dfg_TF(dfg_in, win_len, win_overlap, fmax,
                         need_recalc=True)
 
 # Save the result
-fname_out = ('dfg_TF_test.pkl')
+fname_out = f'dfg_TF_test.pkl'
 #fname_out = ('dfg_TF.pkl')
 fpath_out = os.path.join(dirpath_proc, fname_out)
 dfg_tf.save(fpath_out)

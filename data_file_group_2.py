@@ -16,12 +16,38 @@ import pickle
 from tqdm import tqdm
 import xarray as xr
 
-dirpath_file = os.path.dirname(os.path.abspath(__file__))
-dirpath_pkg = os.path.dirname(dirpath_file)
-sys.path.append(dirpath_pkg)
+# =============================================================================
+# dirpath_file = os.path.dirname(os.path.abspath(__file__))
+# dirpath_pkg = os.path.dirname(dirpath_file)
+# sys.path.append(dirpath_pkg)
+# =============================================================================
 
-import useful as usf
+from . import useful as usf
 
+
+INNER_PROC_MULTITHREAD = 0
+
+
+import io
+import pickle
+
+class RenameUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        renamed_module = module
+        if module == "data_file_group_2":
+            renamed_module = "dfg.data_file_group_2"
+        return super(RenameUnpickler, self).find_class(renamed_module, name)
+
+def renamed_load(file_obj):
+    return RenameUnpickler(file_obj).load()
+
+def renamed_loads(pickled_bytes):
+    file_obj = io.BytesIO(pickled_bytes)
+    return renamed_load(file_obj)
+
+# =============================================================================
+# 
+# =============================================================================
 
 
 class DataProcTree:
@@ -231,7 +257,8 @@ class DataContainerBase:
     def load(self, fpath_in):
         with open(fpath_in, 'rb') as fid:
             #print(fpath_in)
-            obj = pickle.load(fid)
+            #obj = pickle.load(fid)
+            obj = renamed_load(fid)
         self.data_proc_tree = obj.data_proc_tree
         self.outer_table = obj.outer_table
         # Fix un-initialized indices
@@ -295,8 +322,12 @@ class DataTable(DataContainerBase):
 class DataFileGroup(DataContainerBase):
     "Representation of data stored in multiple files."
     
-    def __init__(self, fpath_in=None):
+    def __init__(self, fpath_in=None, chunks=None):
         super().__init__(fpath_in)
+        if chunks is None:
+            self.chunks = {}
+        else:
+            self.chunks = chunks
         
     def add_entry(self, outer_coords, X, fpath_data, save_inner=True):
         # TODO: check that dimension vals' combinations do not repeat
@@ -320,24 +351,33 @@ class DataFileGroup(DataContainerBase):
         column_name = self.get_fpath_data_column_name()
         return self.outer_table.at[table_entry, column_name]
     
-    def load_inner_data_by_path(fpath_data, h5=True):
+    def load_inner_data_by_path(self, fpath_data, h5=True):
+                                #chunks=None):
+                                #chunks='auto'):
+                                #chunks={'trial': -1, 'chan': 'auto', 'freq': -1, 'time': -1}):
         #X = xr.open_dataset(fpath_data, engine='h5netcdf')
         if h5:
-            X = xr.load_dataset(fpath_data, engine='h5netcdf')
+            engine = 'h5netcdf'
         else:
-            X = xr.load_dataset(fpath_data)
+            engine = None
+        X = xr.open_dataset(fpath_data, engine=engine, chunks=self.chunks)
         return X
     
     def load_inner_data(self, table_entry, h5=True):
         fpath_data = self.get_inner_data_path(table_entry)
-        X = DataFileGroup.load_inner_data_by_path(fpath_data, h5)
+        X = self.load_inner_data_by_path(fpath_data, h5)
         return X
     
     def save_inner_data(self, table_entry, X, fpath_out, save_inner=True):
         column_name = self.get_fpath_data_column_name()
         self.outer_table.at[table_entry, column_name] = fpath_out
         if save_inner:
-            X.to_netcdf(fpath_out, engine='h5netcdf', invalid_netcdf=True)
+            encoding = {
+                var: {'chunksizes': tuple([chunk[0] for chunk in X[var].chunks])}
+                for var in X.data_vars
+            }
+            X.to_netcdf(fpath_out, engine='h5netcdf', invalid_netcdf=True,
+                        encoding=encoding)
     
     def make_inner_data_attrs(self, table_entry):
         # Data description - from the last processing step
@@ -419,72 +459,77 @@ def make_data_desc(data_desc_old, var_names, fpath_data_column,
     return data_desc_new
 
 
+# =============================================================================
+# def _apply_dfg_inner_proc_st(dfg_in: DataFileGroup,
+#                          inner_proc, params: dict, 
+#                          proc_step_name: str, gen_proc_step_params,
+#                          fpath_data_column: str, gen_fpath,
+#                          vars_new_descs=None, coords_new_descs=None,
+#                          need_recalc=True):
+#     
+#     # TODO: implement need_recalc
+#     
+#     dfg_out = copy.deepcopy(dfg_in)
+#     
+#     # Add to the outer table a column that will contain paths
+#     # to the output Dataset files
+#     outer_tbl_out = dfg_out.outer_table
+#     outer_tbl_out.insert(len(outer_tbl_out.columns), fpath_data_column, '')
+#     
+#     # Initialize progress bar
+#     pbar = tqdm(total=dfg_in.get_num_table_entries())
+#     
+#     need_init = True
+# 
+#     for entry in dfg_out.get_table_entries():
+#     
+#         # Load dataset
+#         X_in = dfg_in.load_inner_data(entry)
+#         
+#         # Perform inner procedure
+#         X_out = inner_proc(X_in, **params)
+#         
+#         # After the first call of the inner procedure: 
+#         # 1. Create a desciption of the new data based on:
+#         #    - description of the old data (from dfg_in)
+#         #    - properties of the newly generated Dataset (X_out)
+#         #    - additional arguments (vars_new_descs, coords_new_descs,
+#         #      and fpath_data_column)
+#         # 2. Create a description of the new processing step (including
+#         #    the description of the new data)
+#         # 3. Add the new step to the data processing tree
+#         # 4. Put a copy of the data description and the data processing tree
+#         #    into the attributes of the outer table
+#         if need_init:            
+#             data_desc_out = make_data_desc(
+#                     dfg_in.get_data_desc(), list(X_out.data_vars),
+#                     fpath_data_column, list(X_out.dims), list(X_out.coords),
+#                     vars_new_descs, coords_new_descs)
+#             proc_func_name = 'INNER: ' + inner_proc.__name__
+#             dfg_out.data_proc_tree.add_process_step(
+#                     proc_step_name, proc_func_name,
+#                     gen_proc_step_params(params), data_desc_out)
+#             dfg_out.outer_table.attrs = usf.flatten_dict(
+#                     dfg_out.make_data_attrs())
+#             need_init = False
+#         
+#         # Set attributes of the new dataset
+#         dfg_out.set_inner_data_attrs(entry, X_out)
+#         
+#         # Save new dataset and store the path into outer_table
+#         fpath_in = dfg_in.get_inner_data_path(entry)
+#         fpath_out = gen_fpath(fpath_in, params)
+#         dfg_out.save_inner_data(entry, X_out, fpath_out)
+#     
+#         pbar.update()
+#    
+#     pbar.close()
+#     
+#     return dfg_out
+# =============================================================================
+
+
 def apply_dfg_inner_proc(dfg_in: DataFileGroup,
-                         inner_proc, params: dict, 
-                         proc_step_name: str, gen_proc_step_params,
-                         fpath_data_column: str, gen_fpath,
-                         vars_new_descs=None, coords_new_descs=None):
-    
-    dfg_out = copy.deepcopy(dfg_in)
-    
-    # Add to the outer table a column that will contain paths
-    # to the output Dataset files
-    outer_tbl_out = dfg_out.outer_table
-    outer_tbl_out.insert(len(outer_tbl_out.columns), fpath_data_column, '')
-    
-    # Initialize progress bar
-    pbar = tqdm(total=dfg_in.get_num_table_entries())
-    
-    need_init = True
-
-    for entry in dfg_out.get_table_entries():
-    
-        # Load dataset
-        X_in = dfg_in.load_inner_data(entry)
-        
-        # Perform inner procedure
-        X_out = inner_proc(X_in, **params)
-        
-        # After the first call of the inner procedure: 
-        # 1. Create a desciption of the new data based on:
-        #    - description of the old data (from dfg_in)
-        #    - properties of the newly generated Dataset (X_out)
-        #    - additional arguments (vars_new_descs, coords_new_descs,
-        #      and fpath_data_column)
-        # 2. Create a description of the new processing step (including
-        #    the description of the new data)
-        # 3. Add the new step to the data processing tree
-        # 4. Put a copy of the data description and the data processing tree
-        #    into the attributes of the outer table
-        if need_init:            
-            data_desc_out = make_data_desc(
-                    dfg_in.get_data_desc(), list(X_out.data_vars),
-                    fpath_data_column, list(X_out.dims), list(X_out.coords),
-                    vars_new_descs, coords_new_descs)
-            proc_func_name = 'INNER: ' + inner_proc.__name__
-            dfg_out.data_proc_tree.add_process_step(
-                    proc_step_name, proc_func_name,
-                    gen_proc_step_params(params), data_desc_out)
-            dfg_out.outer_table.attrs = usf.flatten_dict(
-                    dfg_out.make_data_attrs())
-            need_init = False
-        
-        # Set attributes of the new dataset
-        dfg_out.set_inner_data_attrs(entry, X_out)
-        
-        # Save new dataset and store the path into outer_table
-        fpath_in = dfg_in.get_inner_data_path(entry)
-        fpath_out = gen_fpath(fpath_in, params)
-        dfg_out.save_inner_data(entry, X_out, fpath_out)
-    
-        pbar.update()
-   
-    pbar.close()
-    
-    return dfg_out
-
-
-def apply_dfg_inner_proc_mt(dfg_in: DataFileGroup,
                          inner_proc, params: dict, 
                          proc_step_name: str, gen_proc_step_params,
                          fpath_data_column: str, gen_fpath,
@@ -502,14 +547,15 @@ def apply_dfg_inner_proc_mt(dfg_in: DataFileGroup,
     #pbar = tqdm(total=dfg_in.get_num_table_entries())
     
     # Process the first entry to get info required for initializing the output
+    X_in_0 = None
     ind0 = dfg_in.outer_table.index[0]
     fpath_in = dfg_in.get_inner_data_path(ind0)
     fpath_out = gen_fpath(fpath_in, params)
     if os.path.exists(fpath_out) and not need_recalc:
-        X_out_0 = DataFileGroup.load_inner_data_by_path(fpath_out)
+        X_out_0 = dfg_out.load_inner_data_by_path(fpath_out)
     else:
-        X_in = dfg_in.load_inner_data(ind0)
-        X_out_0 = inner_proc(X_in, **params)
+        X_in_0 = dfg_in.load_inner_data(ind0)
+        X_out_0 = inner_proc(X_in_0, **params)
     
     # Initialize the output:
     # 1. Create a desciption of the new data based on:
@@ -546,9 +592,11 @@ def apply_dfg_inner_proc_mt(dfg_in: DataFileGroup,
         if os.path.exists(fpath_out) and not need_recalc:
             dfg_out.save_inner_data(entry, None, fpath_out, save_inner=False)
         else:
+            #X_in = None
             if entry == 0:
                 # Precalculated first result
                 X_out = X_out_0
+                X_in = X_in_0
             else:
                 # Load input dataset
                 X_in = dfg_in.load_inner_data(entry)        
@@ -557,17 +605,22 @@ def apply_dfg_inner_proc_mt(dfg_in: DataFileGroup,
             # Set attributes of the new dataset, save it, and add table entry
             dfg_out.set_inner_data_attrs(entry, X_out)
             dfg_out.save_inner_data(entry, X_out, fpath_out)
-    
-    # Initialize progress bar
-    #pbar = tqdm(total=dfg_in.get_num_table_entries())
+            # Close input file handler
+            if X_in is not None:
+                X_in.close()
+                X_in = None
     
     # Run processing of each table entry in a separate thread
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    if INNER_PROC_MULTITHREAD:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for entry in dfg_out.get_table_entries():
+                executor.submit(thread_proc, entry)
+    else:
+        pbar = tqdm(total=dfg_in.get_num_table_entries())
         for entry in dfg_out.get_table_entries():
-            executor.submit(thread_proc, entry)
-            #pbar.update()
-
-    #pbar.close()
+            thread_proc(entry)
+            pbar.update()
+        pbar.close()
     
     return dfg_out
 
@@ -580,11 +633,11 @@ def gen_pathstr_val(x):
     else:
         return str(x)
 
-def apply_dfg_inner_proc_mt_2(dfg_in: DataFileGroup, inner_proc, 
+def apply_dfg_inner_proc_2(dfg_in: DataFileGroup, inner_proc, 
                        proc_step_desc: tuple, params: dict, need_recalc=True,
                        vars_new_descs=None, coords_new_descs=None,
-                       proc_step_name=None, fpath_data_column=None,
-                       fpath_prefix=None, gen_fpath_proc=None):
+                       fpath_data_column=None, fpath_prefix=None,
+                       gen_fpath_proc=None):
     
     # Name of the processing step
     if isinstance(proc_step_desc, str):
@@ -622,11 +675,10 @@ def apply_dfg_inner_proc_mt_2(dfg_in: DataFileGroup, inner_proc,
     if gen_fpath_proc is None:
         gen_fpath_proc = gen_fpath_
         
-    dfg_out = apply_dfg_inner_proc_mt(
+    dfg_out = apply_dfg_inner_proc(
             dfg_in, inner_proc, params2, proc_step_name_full,
             gen_proc_step_params, fpath_data_column, gen_fpath_proc,
-            vars_new_descs, coords_new_descs,
-            need_recalc
+            vars_new_descs, coords_new_descs, need_recalc
             )
     return dfg_out
 

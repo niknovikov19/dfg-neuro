@@ -331,3 +331,15 @@ def copy_files(fpath_list, dirpath_base_old, dirpath_base_new):
         shutil.copy(fpath_in, fpath_out)
         pbar.update()
     pbar.close()
+
+
+def get_dataset_chunks(X: xr.Dataset()):
+    chunks = {}
+    for var in X.data_vars:
+        var_chunks = X[var].chunks
+        if var_chunks is None:
+            var_chunks_sz = None
+        else:
+            var_chunks_sz = tuple([chunk[0] for chunk in var_chunks])
+        chunks[var] = {'chunksizes': var_chunks_sz}
+    return chunks

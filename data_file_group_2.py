@@ -372,13 +372,7 @@ class DataFileGroup(DataContainerBase):
         column_name = self.get_fpath_data_column_name()
         self.outer_table.at[table_entry, column_name] = fpath_out
         if save_inner:
-            if list(X.values())[0].chunks is None:
-                encoding = None  # not a dask array
-            else:
-                encoding = {
-                    var: {'chunksizes': tuple([chunk[0] for chunk in X[var].chunks])}
-                    for var in X.data_vars
-                }
+            encoding = usf.get_dataset_chunks(X)
             X.to_netcdf(fpath_out, engine='h5netcdf', invalid_netcdf=True,
                         encoding=encoding)
     
@@ -669,7 +663,8 @@ def apply_dfg_inner_proc_2(dfg_in: DataFileGroup, inner_proc,
     def gen_fpath_(fpath_in, params2_):
         fpath_noext, ext = os.path.splitext(fpath_in)
         fpath = fpath_noext + '_' + proc_step_name_short
-        params_used = [par for par in params.values() if par['short'] is not None]
+        params_used = {name: par for name, par in params.items()
+                       if par['short'] is not None}
         if len(params_used):
             fpath += '_('
             for name, par in params_used.items():

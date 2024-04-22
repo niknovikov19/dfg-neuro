@@ -346,12 +346,16 @@ def get_dataset_chunks(X: xr.Dataset()):
     return chunks
 
 
-def create_compatible_xarray(X, dims_excl=None, dims_new=None, coords_new=None):
-    """ Create empty DataArray similar to X, with excluded and added dims."""
-    # Dimensions: old - excluded + new
+def create_compatible_xarray(X, dims_excl=None, dims_new=None, dims_rep=None,
+                             coords_new=None):
+    """ Create array similar to X, with excluded, replaced and added dims."""
     if dims_excl is None:  dims_excl = []
     if dims_new is None:  dims_new = []
+    if dims_rep is None:  dims_rep = []
+    # Dimensions
     dims_out = [dim for dim in X.dims if dim not in dims_excl]
+    for dim_old, dim_new in dims_rep:
+        dims_out[dims_out.index(dim_old)] = dim_new
     dims_out += dims_new
     # Coordinates    
     coords_out = get_xarray_coords_dict(X)
@@ -377,3 +381,9 @@ def create_compatible_xarray(X, dims_excl=None, dims_new=None, coords_new=None):
     Y_ = da.full(shape_out, np.nan, chunks=chunks_out)    
     Y = xr.DataArray(Y_, dims=dims_out, coords=coords_out)
     return Y
+
+
+def slice_ndarray(x, ind, axis):
+    idx = [slice(None)] * x.ndim
+    idx[axis] = ind
+    return x[tuple(idx)]

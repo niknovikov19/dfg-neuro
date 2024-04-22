@@ -11,6 +11,7 @@ import os
 import re
 import sys
 
+import dask.array as da
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -343,3 +344,36 @@ def get_dataset_chunks(X: xr.Dataset()):
             var_chunks_sz = tuple([chunk[0] for chunk in var_chunks])
         chunks[var] = {'chunksizes': var_chunks_sz}
     return chunks
+
+
+def create_compatible_xarray(X, dims_excl=None, dims_new=None, coords_new=None):
+    """ Create empty DataArray similar to X, with excluded and added dims."""
+    # Dimensions: old - excluded + new
+    if dims_excl is None:  dims_excl = []
+    if dims_new is None:  dims_new = []
+    dims_out = [dim for dim in X.dims if dim not in dims_excl]
+    dims_out += dims_new
+    # Coordinates    
+    coords_out = get_xarray_coords_dict(X)
+    coords_out = {name: coord for name, coord in coords_out.items()
+                  if coord[0] not in dims_excl}
+    if coords_new is not None:
+        coords_out.update(coords_new)
+    # Shape
+    shape_out = []
+    for dim in dims_out:
+        coord_vals = [c[1] for c in coords_out.values() if c[0] == dim][0]
+        shape_out.append(len(coord_vals))
+    # Chunks
+    if X.chunks is None:
+        chunks_out = None
+    else:
+        chunks_out = {dim: sz[0] for dim, sz in zip(X.dims, X.chunks)
+                      if dim in dims_out}
+        for dim in dims_new:
+            chunks_out[dim] = -1
+        chunks_out = [chunks_out[dim] for dim in dims_out]
+    # Create dask-backed DataArray
+    Y_ = da.full(shape_out, np.nan, chunks=chunks_out)    
+    Y = xr.DataArray(Y_, dims=dims_out, coords=coords_out)
+    return Y

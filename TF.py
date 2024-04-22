@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-# -*- coding: utf-8 -*-
 """
 Created on Sat Feb 27 22:03:10 2021
 
@@ -39,20 +37,6 @@ def _calc_dfg_tf_inner(X_in, win_len=0.5, win_overlap=0.45, fmax=100,
     # Window and overlap in samples
     win_len_samp = round(win_len * fs)
     win_overlap_samp = round(win_overlap * fs)
-    
-# =============================================================================
-#     # Axis corresponding to the time dimension of X_in
-#     time_dim_name = X_in.coords['time'].dims[0]    # time or sample
-#     time_dim_axis_in = X_in.dims.index(time_dim_name)
-#     
-#     # Time-frequency transform
-#     # In W_, the time dim. of X_in will be replaced by freq dim.,
-#     # and time dim. will be added as the last one
-#     (ff, tt, W_) = sig.spectrogram(
-#         X_in.values, fs, mode='complex', axis=time_dim_axis_in,
-#         window=sig.windows.hamming(win_len_samp),
-#         noverlap=win_overlap_samp)
-# =============================================================================
 
     xz = np.zeros(len(X_in.time))
     ff, tt, _ = sig.spectrogram(

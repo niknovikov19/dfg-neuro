@@ -347,7 +347,8 @@ def get_dataset_chunks(X: xr.Dataset()):
 
 
 def create_compatible_xarray(X, dims_excl=None, dims_new=None, dims_rep=None,
-                             coords_new=None):
+                             coords_new=None, dtype=np.float64,
+                             dims_new_pos=-1):
     """ Create array similar to X, with excluded, replaced and added dims."""
     if dims_excl is None:  dims_excl = []
     if dims_new is None:  dims_new = []
@@ -356,13 +357,18 @@ def create_compatible_xarray(X, dims_excl=None, dims_new=None, dims_rep=None,
     dims_out = [dim for dim in X.dims if dim not in dims_excl]
     for dim_old, dim_new in dims_rep:
         dims_out[dims_out.index(dim_old)] = dim_new
-    dims_out += dims_new
+    if dims_new_pos == -1:
+        dims_out = dims_out + dims_new
+    elif dims_new_pos == 0:
+        dims_out = dims_new + dims_out
+    else:
+        raise ValueError('Invalid dims_new_pos')
     # Coordinates    
     coords_out = get_xarray_coords_dict(X)
-    coords_out = {name: coord for name, coord in coords_out.items()
-                  if coord[0] not in dims_excl}
     if coords_new is not None:
         coords_out.update(coords_new)
+    coords_out = {name: coord for name, coord in coords_out.items()
+                  if coord[0] in dims_out}
     # Shape
     shape_out = []
     for dim in dims_out:
@@ -374,11 +380,12 @@ def create_compatible_xarray(X, dims_excl=None, dims_new=None, dims_rep=None,
     else:
         chunks_out = {dim: sz[0] for dim, sz in zip(X.dims, X.chunks)
                       if dim in dims_out}
-        for dim in dims_new:
-            chunks_out[dim] = -1
+        for dim in dims_out:
+            if dim not in chunks_out:
+                chunks_out[dim] = -1
         chunks_out = [chunks_out[dim] for dim in dims_out]
     # Create dask-backed DataArray
-    Y_ = da.full(shape_out, np.nan, chunks=chunks_out)    
+    Y_ = da.full(shape_out, np.nan, chunks=chunks_out, dtype=dtype)
     Y = xr.DataArray(Y_, dims=dims_out, coords=coords_out)
     return Y
 

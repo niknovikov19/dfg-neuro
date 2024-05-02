@@ -286,6 +286,16 @@ class DataContainerBase:
     def print_proc_tree(self):
         pprint(self.data_proc_tree.proc_steps)
         
+    def get_outer_coord_names(self):        
+        return list(self.get_data_desc()['outer_coords'].keys())
+    
+    def get_entry_outer_coords(self, entry):
+        rec = self.get_table_entry_rec(entry)
+        outer_coord_names = self.get_outer_coord_names()
+        outer_coords = {name: val for name, val in rec.items()
+                        if name in outer_coord_names}
+        return outer_coords
+        
 
 # =============================================================================
 # 
@@ -341,8 +351,11 @@ class DataFileGroup(DataContainerBase):
             (self.outer_table, new_entry_data_pd), ignore_index=True)
         table_entry = self.get_last_table_entry()
         # Save inner data and store the corresponding path into outer_table
-        self.set_inner_data_attrs(table_entry, X)
-        self.save_inner_data(table_entry, X, fpath_data, save_inner)
+        if X is None:
+            self.save_inner_data(table_entry, X, fpath_data, save_inner=False)
+        else:
+            self.set_inner_data_attrs(table_entry, X)
+            self.save_inner_data(table_entry, X, fpath_data, save_inner)
     
     def get_fpath_data_column_name(self):
         return self.get_data_desc()['fpath_data_column']
@@ -366,6 +379,11 @@ class DataFileGroup(DataContainerBase):
     def load_inner_data(self, table_entry, h5=True):
         fpath_data = self.get_inner_data_path(table_entry)
         X = self.load_inner_data_by_path(fpath_data, h5)
+        return X
+    
+    def load_inner_data_by_coords(self, coords, h5=True):
+        entry = self.get_table_entry_by_coords(coords)
+        X = self.load_inner_data(entry, h5)
         return X
     
     def save_inner_data(self, table_entry, X, fpath_out, save_inner=True):
@@ -407,6 +425,12 @@ class DataFileGroup(DataContainerBase):
         X.attrs = usf.flatten_dict(attrs)
         for var in X.data_vars.values():
             var.attrs.clear()
+            
+    def items(self):
+        for entry in self.get_table_entries():
+            outer_coords = self.get_entry_outer_coords(entry)
+            with self.load_inner_data(entry) as X:
+                yield (outer_coords, X)
 
 
 # =============================================================================
@@ -618,6 +642,7 @@ def apply_dfg_inner_proc(dfg_in: DataFileGroup,
             thread_proc(entry)
             pbar.update()
         pbar.close()
+        print()
     
     return dfg_out
 
@@ -626,7 +651,9 @@ def gen_pathstr_val(x):
     if isinstance(x, dict):
         raise ValueError('Cannot add dict to filename')
     elif isinstance(x, (list, tuple, np.ndarray)):
-        return f'{x[0]}_{x[-1]}'
+        s0 = gen_pathstr_val(x[0])
+        s1 = gen_pathstr_val(x[-1])
+        return f'{s0}_{s1}'
     else:
         return str(x)
 

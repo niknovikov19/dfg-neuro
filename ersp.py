@@ -18,45 +18,39 @@ import scipy.signal as sig
 #import pandas as pd
 import xarray as xr
 
-import data_file_group_2 as dfg
+from . import data_file_group_2 as dfg
 #import firing_rate as fr
-import roi_utils as roi
+#import roi_utils as roi
 #import spiketrain_manager as spk
-import useful as usf
+#import useful as usf
 
 
-def _calc_dfg_ersp_inner(X_in, baseline, var_name='TF', time_win=None):
+def _calc_dfg_ersp_inner(X_in, baseline):
     
-    # Select the variable to process and
-    X_in = X_in[var_name]
-    
-    # Complex amplitude -> power
-    X_pow = np.real(X_in * np.conjugate(X_in))
+    X = {}
+    X['total'] = X_in['TFpow']
+    X['pl'] = X_in['TFpow_pl']
+    X['npl'] = X_in['TFpow'] - X_in['TFpow_pl']
     
     # Baseline
-    X_bl = X_pow.sel(time=slice(*baseline)).mean(dim=['time', 'trial'])
+    for key, X_ in X.items():
+        if 'trial' in X_.dims:
+            dims_avg = ['time', 'trial']
+        else:
+            dims_avg = ['time']
+        X_bl = X_.sel(time=slice(*baseline)).mean(dim=dims_avg)
+        X[key] = (X_ - X_bl) / X_bl
     
-    # ERSP
-    X_ersp = (X_pow - X_bl) / X_bl
-    
-    # Select time interval of interest
-    if time_win is not None:
-        X_ersp = X_ersp.sel(time=slice(*time_win))
-    
-    return xr.Dataset({'ERSP': X_ersp})
+    res = {'ERSP': X['total'], 'ERSP_pl': X['pl'], 'ERSP_npl': X['npl']}    
+    return xr.Dataset(res)
 
 
-def calc_dfg_ersp(dfg_in, baseline, var_name='TF', time_win=None, 
-                  need_recalc=True):
+def calc_dfg_ersp(dfg_in, baseline, need_recalc=True):
     
     proc_step_name = 'ERSP'
     params = {'baseline': {'val': baseline, 'short': 'bl',
-                           'desc': 'Baseline time window, s'},
-              'var_name': {'val': var_name, 'short': None,
-                           'desc': 'Variable to process'},
-              'time_win': {'val': time_win, 'short': 't',
-                           'desc': 'Time window to keep'}}
-    dfg_out = dfg.apply_dfg_inner_proc_mt_2(
+                           'desc': 'Baseline time window, s'}}
+    dfg_out = dfg.apply_dfg_inner_proc_2(
             dfg_in, _calc_dfg_ersp_inner, proc_step_name, params, need_recalc
             )    
     return dfg_out

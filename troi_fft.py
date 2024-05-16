@@ -76,7 +76,7 @@ def _calc_troi_fft_inner(X_in, t_rois, fs=None, var_name='LFP'):
 
 
 def calc_dfg_troi_fft(dfg_in, t_rois, var_name='LFP', need_recalc=True):
-    """ Windowed FFT in several time ROIs. """
+    """ Windowed FFT in several time ROIs."""
 
     proc_step_desc = ('FFT', 'Windowed FFT in several time ROIs')
     params = {

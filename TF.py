@@ -107,7 +107,11 @@ def calc_dfg_tf(dfg_in, win_len=0.5, win_overlap=0.45, fmax=100,
         'fmax': {
             'val': fmax, 'short': 'fmax',
                 'desc': 'Upper frequency in TF transform, Hz'
-                }
+                },
+        'var_name': {
+            'val': var_name, 'short': 'var',
+            'desc': 'Variable to process'
+            }
         }
     vars_new_desc = {'TF': 'Time-frequency complex amplitude'}
     coords_new_descs = {

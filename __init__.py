@@ -8,3 +8,6 @@ from . import troi_fft
 from . import ersp
 from .dfg_to_xr import dfg_to_xr
 from .avg_ref import dfg_avg_ref
+from .filter import dfg_filt
+from .csd import dfg_csd
+from .normalize import dfg_normalize

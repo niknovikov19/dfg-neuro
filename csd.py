@@ -5,6 +5,8 @@ from . import data_file_group_2 as dfg
 
 
 def _csd(X, axis, d):
+    #axis = -1
+    #print(f'Shape: {X.shape}, axis={axis}')
     Xfirst = np.expand_dims(np.take(X, 0, axis), axis)
     Xlast = np.expand_dims(np.take(X, -1, axis), axis)
     X = np.concatenate((Xfirst, X, Xlast), axis)
@@ -20,9 +22,13 @@ def _dfg_csd_inner(X_in):
             X_out[var_name] = X
     
     # Change channel order: from superficial to deep
-    # There are 2 channels at each depth, so take each 2-nd channel
-    X = X_in['LFP'].T
-    X = X.isel(chan=slice(None, None, -2))
+    # Take each 4-th channel, so they are all in the same column
+    X = X_in['LFP']
+    X = X.isel(chan=slice(None, None, -4))
+    #X = X.compute()
+    
+    if (X.dims[-1] != 'sample') or (X.dims[-2] != 'chan'):
+        raise ValueError('Last two dimensions should be chan and sample')
     
     chan_axis = X.dims.index('chan')
     d = float(X.depth[1] - X.depth[0]) * 1e-3
@@ -30,12 +36,14 @@ def _dfg_csd_inner(X_in):
     Y = xr.apply_ufunc(
         _csd, X,
         kwargs={'axis': chan_axis, 'd': d},
-        input_core_dims=[['chan']],
-        output_core_dims=[['chan']],
-        vectorize=False, dask='parallelized',
+        input_core_dims=[['chan', 'sample']],
+        output_core_dims=[['chan', 'sample']],
+        vectorize=False,
+        dask='parallelized',
+        #dask='forbidden',
         output_dtypes=[np.float64]
     )
-    X_out['CSD'] = Y.T
+    X_out['CSD'] = Y
     
     return xr.Dataset(X_out)
 

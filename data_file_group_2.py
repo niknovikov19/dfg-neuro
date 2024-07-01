@@ -355,6 +355,8 @@ class DataFileGroup(DataContainerBase):
             self.save_inner_data(table_entry, X, fpath_data, save_inner=False)
         else:
             self.set_inner_data_attrs(table_entry, X)
+            if len(X.attrs['fpath_parent']) == 0:  # it is the first step 
+                X.attrs['fpath_parent'] = [fpath_data]  # set its own path as parent
             self.save_inner_data(table_entry, X, fpath_data, save_inner)
     
     def get_fpath_data_column_name(self):
